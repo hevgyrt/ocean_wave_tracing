@@ -6,13 +6,16 @@ logging.basicConfig(filename='wave_tracing.log', level=logging.INFO)
 logging.info('\nStarted')
 
 class Wave_tracing_FE():
-    def __init__(self, U, V, nx, ny, nt,T,dx,dy, wave_period, theta0,
+    def __init__(self, U, V,  nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays,
                  domain_X0, domain_XN, domain_Y0, domain_YN):
         """
+
         U (2d) = eastward velocity
 
-        nx: number of grid points x-dir
-        ny: number of grid points y-dir
+        nb_wave_rays: number wave rays
+        nx: number of grid points in x-dir
+        ny: number of grid points in y-dir
+        theta0: radians. Waves are coming from according to oceanography convention
         """
         self.g = 9.81
         self.U = U
@@ -24,6 +27,7 @@ class Wave_tracing_FE():
         self.dy = dy
         self.wave_period = wave_period
         self.theta0 = theta0
+        self.nb_wave_rays = nb_wave_rays
 
         self.domain_X0 = domain_X0
         self.domain_XN = domain_XN
@@ -32,21 +36,24 @@ class Wave_tracing_FE():
 
 
         self.x = np.linspace(domain_X0, domain_XN, nx)
-        #self.y = np.linspace(0, ny*dy, ny)
         self.y = np.linspace(domain_Y0, domain_YN, ny)
-        self.xr = np.zeros((ny,nt))
-        self.yr = np.zeros((ny,nt))
+
+        self.xr = np.zeros((nb_wave_rays,nt))
+        self.yr = np.zeros((nb_wave_rays,nt))
+        self.kx = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
+        self.ky = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
+        self.k = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
+        self.theta = np.ma.zeros((nb_wave_rays,nt))
+
         self.dt = T/nt
         self.t = np.linspace(0,T,nt)
-        self.kx = np.zeros((ny,nt))#np.zeros(nt)
-        self.ky = np.zeros((ny,nt))#np.zeros(nt)
-        self.k = np.zeros((ny,nt))#np.zeros(nt)
-        self.theta = np.ma.zeros((ny,nt))
 
-
-
+        # Compute velocity gradients
         self.dudy, self.dudx = np.gradient(U,dx)
         self.dvdy, self.dvdx = np.gradient(V,dy)
+
+
+
 
     def find_nearest(self,array, value):
         array = np.asarray(array)
@@ -75,8 +82,8 @@ class Wave_tracing_FE():
     def set_initial_condition(self):
         k0, kx0, ky0 = self.wave(self.wave_period, self.theta0)
 
-        self.xr[:,0]=0
-        self.yr[:,0]=self.y
+        self.xr[:,0]=self.domain_X0
+        self.yr[:,0]=np.linspace(self.domain_Y0, self.domain_YN, self.nb_wave_rays)
         self.kx[:,0]=kx0
         self.ky[:,0]=ky0
         self.k[:,0]=k0
@@ -101,6 +108,7 @@ class Wave_tracing_FE():
         x= self.x
         y= self.y
         dt= self.dt
+        nt = self.nt
 
         dt2 = dt/2.0
         counter=0
@@ -135,7 +143,7 @@ class Wave_tracing_FE():
 
             #print(idxs)
             #print(idys)
-            #print(U)
+            #print(xr.shape, U.shape, cg_i_x.shape)
             xr[:,n+1] = xr[:,n] + dt*(cg_i_x+U[idys,idxs])
             yr[:,n+1] = yr[:,n] + dt*(cg_i_y+V[idys,idxs])
 
@@ -144,8 +152,14 @@ class Wave_tracing_FE():
             ky[:,n+1] = ky[:,n] - dt*(kx[:,n]*dudy[idys,idxs] + ky[:,n]*dvdy[idys,idxs])
             k[:,n+1] = np.sqrt(kx[:,n+1]**2+ky[:,n+1]**2)
             counter += 1
-            #if counter==5:
-            #    break
+            if counter==1:
+                logging.info(np.any(np.isnan(U[idys,idxs])))
+                #logging.info([idd for idd in idys])
+                #logging.info([idd for idd in idxs])
+                #logging.info(idys)
+                #logging.info("idxs:{}".format(idys))
+                #logging.info("x:{}".format(x))
+
 
             """ FE
             xr[:,n+1] = xr[:,n] + dt*(cg_i_x+U[idys,idxs])
@@ -165,60 +179,58 @@ class Wave_tracing_FE():
         self.theta = theta
 
 
-#if __name__ == '__main__()':
-import xarray as xa
+
+if __name__ == '__main__':
+    import xarray as xa
 
 
-"""
-X = 3000 #m
-Y = 1500 #m
-nx, ny = (200,101)
-x = np.linspace(0, X, nx)
-y = np.linspace(-Y, Y, ny)
-dx,dy = 15,15
+    """
+    X = 3000 #m
+    Y = 1500 #m
+    nx, ny = (200,101)
+    x = np.linspace(0, X, nx)
+    y = np.linspace(-Y, Y, ny)
+    dx,dy = 15,15
 
-U0 = -.1
-Y = np.max(y)*2
-U_y = U0*np.cos((np.pi*y)/Y)**2
+    U0 = -.1
+    Y = np.max(y)*2
+    U_y = U0*np.cos((np.pi*y)/Y)**2
 
-U = (np.ones((nx,ny))*U_y).T
-V = np.zeros((ny,nx))
-"""
-u_eastwards = xa.open_dataset('u_eastwards.nc')
-v_northwards = xa.open_dataset('v_northward.nc')
-U = u_eastwards.isel(time=1).to_array()[0].data
-V = v_northwards.isel(time=1).to_array()[0].data
+    U = (np.ones((nx,ny))*U_y).T
+    V = np.zeros((ny,nx))
+    """
+    u_eastwards = xa.open_dataset('u_eastwards.nc')
+    v_northwards = xa.open_dataset('v_northward.nc')
+    U = u_eastwards.isel(time=1).to_array()[0].data
+    V = v_northwards.isel(time=1).to_array()[0].data
 
-X = u_eastwards.X
-Y = u_eastwards.Y
-nx = U.shape[1]
-ny = U.shape[0]
-#nx = 100
-#ny=40
-dx=dy=800
+    X = u_eastwards.X
+    Y = u_eastwards.Y
+    nx = U.shape[1]
+    ny = U.shape[0]
+    nb_wave_rays = 120
+    #nx = 100
+    #ny=40
+    dx=dy=800
 
-T = 40000
-print("T={}h".format(T/3600))
-nt = 2500
-wave_period = 10
-theta0 = 0#np.pi/8
-wt = Wave_tracing_FE(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0,
-                    domain_X0=X[0].data, domain_XN=X[-1].data,
-                    domain_Y0=Y[0].data, domain_YN=Y[-1].data)
-wt.set_initial_condition()
-wt.solve()
-
-fig,ax = plt.subplots(figsize=(16,6))
-#pc=ax.pcolormesh(wt.x,wt.y,wt.U)
-#pc=ax.pcolormesh(np.arange(len(u_eastwards.X))*800,np.arange(len(u_eastwards.Y))*800,wt.U)
-pc=ax.pcolormesh(X,Y,wt.U)
-for i in range(5,wt.ny-1,5):
-    ax.plot(X[0].data+wt.xr[i,:],wt.yr[i,:],'-k')
-
-ax.set_xlim([X[0].data,X[-1].data])
-ax.set_ylim([Y[0].data,Y[-1].data])
-idts = np.arange(0,wt.nt,40)
-#ax.plot(wt.xr[:,idts],wt.yr[:,idts],'--k')
-cb = fig.colorbar(pc)
-#fig.savefig('T3')
-plt.show()
+    T = 21000
+    print("T={}h".format(T/3600))
+    nt = 2000
+    wave_period = 10
+    theta0 = 0#np.pi/8
+    wt = Wave_tracing_FE(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
+                        domain_X0=X[0].data, domain_XN=X[-1].data,
+                        domain_Y0=Y[0].data, domain_YN=Y[-1].data)
+    wt.set_initial_condition()
+    wt.solve()
+    fig,ax = plt.subplots(figsize=(16,6))
+    #pc=ax.pcolormesh(wt.x,wt.y,wt.U)
+    #pc=ax.pcolormesh(np.arange(len(u_eastwards.X))*800,np.arange(len(u_eastwards.Y))*800,wt.U)
+    pc=ax.pcolormesh(X,Y,wt.U)
+    for i in range(wt.nb_wave_rays):
+        #for i in range(wt.ny):
+        #ax.plot(X[0].data+wt.xr[i,:],wt.yr[i,:],'-k')
+        ax.plot(wt.xr[i,:],wt.yr[i,:],'-k')
+    cb = fig.colorbar(pc)
+                #fig.savefig('T3')
+    plt.show()
