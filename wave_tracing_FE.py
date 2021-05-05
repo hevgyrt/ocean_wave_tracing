@@ -6,16 +6,26 @@ logging.basicConfig(filename='wave_tracing.log', level=logging.INFO)
 logging.info('\nStarted')
 
 class Wave_tracing_FE():
-    def __init__(self, U, V,  nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays,
-                 domain_X0, domain_XN, domain_Y0, domain_YN):
+    """ Class for tracing wave rays according to the geometrical optics
+    approximation.
+    """
+    def __init__(self, U, V,  nx, ny, nt, T, dx, dy, wave_period, theta0,
+                 nb_wave_rays, domain_X0, domain_XN, domain_Y0, domain_YN):
         """
-
-        U (2d) = eastward velocity
-
-        nb_wave_rays: number wave rays
-        nx: number of grid points in x-dir
-        ny: number of grid points in y-dir
-        theta0: radians. Waves are coming from according to oceanography convention
+        Args:
+            U (float): eastward velocity 2D field
+            V (float): northward velocity 2D field
+            nx (int): number of points in x-direction of velocity domain
+            ny (int): number of points in y-direction of velocity domain
+            nt (int): number of time steps for computation
+            T (int): Seconds. Duration of wave tracing
+            dx (int): Spatial resolution in x-direction. Units conforming to U
+            dy (int): Spatial resolution in y-direction. Units conforming to V
+            wave_period (float): Wave period.
+            theta0 (rad): Wave initial direction. In radians
+            nb_wave_rays (int): Number of wave rays to track
+            domain_*0 (float): start value of domain area in X and Y direction
+            domain_*N (float): end value of domain area in X and Y direction
         """
         self.g = 9.81
         self.U = U
@@ -34,10 +44,11 @@ class Wave_tracing_FE():
         self.domain_Y0 = domain_Y0
         self.domain_YN = domain_YN
 
-
+        # Setting up X and Y domain
         self.x = np.linspace(domain_X0, domain_XN, nx)
         self.y = np.linspace(domain_Y0, domain_YN, ny)
 
+        # Setting up the wave rays
         self.xr = np.zeros((nb_wave_rays,nt))
         self.yr = np.zeros((nb_wave_rays,nt))
         self.kx = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
@@ -45,6 +56,7 @@ class Wave_tracing_FE():
         self.k = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
         self.theta = np.ma.zeros((nb_wave_rays,nt))
 
+        # Time
         self.dt = T/nt
         self.t = np.linspace(0,T,nt)
 
@@ -53,14 +65,33 @@ class Wave_tracing_FE():
         self.dvdy, self.dvdx = np.gradient(V,dy)
 
 
-
-
     def find_nearest(self,array, value):
+        """ Method for finding neares indicies to value in array
+
+        Args:
+            array: Array containg values to be compared
+            value (float): value to which index in array should be found
+
+        Returns:
+            idx (int): Index of array value closest to value
+        """
         array = np.asarray(array)
         idx = (np.abs(array - value)).argmin()
         return idx
 
     def c_intrinsic(self,k,group_velocity=False):
+        """ Method computing intrinsic wave phase and group velocity according
+        to deep water dispersion relation
+
+        Args:
+            k: wave number
+            group_velocity (bool): returns group velocity (True) or phase
+                velocity (False)
+
+        Returns:
+            instrinsic velocity (float): group or phase velocity depending on
+                flag
+        """
         g=self.g
         if group_velocity:
             return 0.5*np.sqrt(g/k)
@@ -68,7 +99,17 @@ class Wave_tracing_FE():
             return np.sqrt(g/k)
 
     def wave(self,T,theta):
-        """ DEEP WATER """
+        """ Method computing deep water wave properties
+
+        Args:
+            T (float): Wave period
+            theta (float): radians. Wave direction
+
+        Returns:
+            k0 (float): wave number
+            kx0 (float): wave number in x-direction
+            ky0 (float): wave number in y-direction
+        """
         g=self.g
 
         sigma = (2*np.pi)/T
@@ -80,6 +121,8 @@ class Wave_tracing_FE():
 
 
     def set_initial_condition(self):
+        """ Setting inital conditions before solving numertically.
+        """
         k0, kx0, ky0 = self.wave(self.wave_period, self.theta0)
 
         self.xr[:,0]=self.domain_X0
@@ -93,6 +136,8 @@ class Wave_tracing_FE():
 #        return arg1 + arg2
 
     def solve(self):
+        """ Solve the geometrical optics equations numerically
+        """
         k = self.k
         kx= self.kx
         ky= self.ky
