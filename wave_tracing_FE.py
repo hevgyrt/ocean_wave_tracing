@@ -223,6 +223,46 @@ class Wave_tracing_FE():
         self.yr= yr
         self.theta = theta
 
+    def ray_density(self,x_increment, y_increment, plot=False):
+        """ Method computing ray density within boxes. The density of wave rays
+        can be used as proxy for wave energy density
+
+        Args:
+            x_increment (int): size of box in x direction. Length = x_increment*dx
+            y_increment (int): size of box in y direction. Length = y_increment*dy
+
+        Returns:
+            xx (2d): x grid
+            yy (2d): y grid
+            hm (2d): heat map of wave ray density
+        """
+        xx,yy=np.meshgrid(self.x[::x_increment],self.y[::y_increment])
+        hm = np.zeros(xx.shape) # heatmap
+        xs = xx[0]
+        ys = yy[:,0]
+
+        counter=0
+        for i in range(0,self.nb_wave_rays):
+            for idx in range(len(xs)-1):
+                x0, xn = xs[idx],xs[idx+1]
+                for idy in range(len(ys)-1):
+                    y0, yn = ys[idy],ys[idy+1]
+                    counter+=1
+                    valid_x = (self.xr[i,:]>x0)*(self.xr[i,:]<xn)
+                    if (np.any((self.yr[i,:][valid_x]>y0)*(self.yr[i,:][valid_x]<yn))):
+                        #print(idx,idy,'OK')
+                        hm[idy,idx]+=1
+
+        if plot:
+            plt.pcolormesh(xx,yy,hm)
+            plt.colorbar()
+            for i in range(0,self.nb_wave_rays):
+                plt.plot(self.xr[i,:],self.yr[i,:],'-r',alpha=0.3)
+            plt.scatter(xx,yy);plt.show()
+
+        return xx,yy,hm
+
+
 
 
 if __name__ == '__main__':
