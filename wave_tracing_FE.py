@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import logging
+import xarray as xa
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename='wave_tracing.log', level=logging.INFO)
 logging.info('\nStarted')
@@ -10,7 +11,8 @@ class Wave_tracing_FE():
     approximation.
     """
     def __init__(self, U, V,  nx, ny, nt, T, dx, dy, wave_period, theta0,
-                 nb_wave_rays, domain_X0, domain_XN, domain_Y0, domain_YN):
+                 nb_wave_rays, domain_X0, domain_XN, domain_Y0, domain_YN,
+                 temporal_evolution=False, T0=None):
         """
         Args:
             U (float): eastward velocity 2D field
@@ -26,10 +28,10 @@ class Wave_tracing_FE():
             nb_wave_rays (int): Number of wave rays to track
             domain_*0 (float): start value of domain area in X and Y direction
             domain_*N (float): end value of domain area in X and Y direction
+
+            temporal_evolution (bool): flag if velocity field should change in time
         """
         self.g = 9.81
-        self.U = U
-        self.V = V
         self.nx = nx
         self.ny = ny
         self.nt = nt
@@ -44,6 +46,8 @@ class Wave_tracing_FE():
         self.domain_Y0 = domain_Y0
         self.domain_YN = domain_YN
 
+        self.temporal_evolution = temporal_evolution
+
         # Setting up X and Y domain
         self.x = np.linspace(domain_X0, domain_XN, nx)
         self.y = np.linspace(domain_Y0, domain_YN, ny)
@@ -56,13 +60,35 @@ class Wave_tracing_FE():
         self.k = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
         self.theta = np.ma.zeros((nb_wave_rays,nt))
 
+
+        # decide velocity field if xarray object or
+        if not type(U) == xa.DataArray:
+            self.U = xa.DataArray(U)
+            self.V = xa.DataArray(V)
+            if not temporal_evolution:
+                self.U = self.U.expand_dims('time')
+                self.V = self.V.expand_dims('time')
+        else:
+            self.U = U
+            self.V = V
+            if not 'time' in self.U.dims:
+                self.U = self.U.expand_dims('time')
+                self.V = self.V.expand_dims('time')
+
         # Time
         self.dt = T/nt
-        self.t = np.linspace(0,T,nt)
+        self.nb_velocity_time_steps = len(self.U.time)
+        if not temporal_evolution:
+            self.velocity_idt = np.zeros(nt,dtype=np.int)
+            logging.info('Vel idt : {}'.format(self.velocity_idt))
+        else:
+            t_velocity_field = U.time.data
+            self.T0 = t_velocity_field[0]
+            t_wr = np.arange(self.T0, self.T0+np.timedelta64(T,'s'),np.timedelta64(int(((T/nt)*1e3)),'ms'))
+            self.velocity_idt = np.array([self.find_nearest(t_velocity_field,t_wr[i]) for i in range(len(t_wr))])
+            logging.info('Vel idt : {}'.format(self.velocity_idt))
+            logging.info('lengtsh: {}, {}'.format(len(self.velocity_idt),nt))
 
-        # Compute velocity gradients
-        self.dudy, self.dudx = np.gradient(U,dx)
-        self.dvdy, self.dvdx = np.gradient(V,dy)
 
 
     def find_nearest(self,array, value):
@@ -138,22 +164,43 @@ class Wave_tracing_FE():
     def solve(self):
         """ Solve the geometrical optics equations numerically
         """
+
         k = self.k
         kx= self.kx
         ky= self.ky
         xr= self.xr
         yr= self.yr
         theta= self.theta
-        U= self.U
-        V= self.V
-        dudx= self.dudx
-        dudy= self.dudy
-        dvdx = self.dvdx
-        dvdy = self.dvdy
+        logging.info(self.U.dims)
+
+        dx = self.dx
+        dy = self.dy
+
+        U = self.U.data
+        V = self.V.data
+
+        #Compute velocity gradients
+
+        logger.warning('Assuming uniform horizontal resolution')
+        if self.nb_velocity_time_steps>1:
+            dudy, dudx = np.gradient(U,dx)[1:3]
+            dvdy, dvdx = np.gradient(V,dy)[1:3]
+        else:
+            dudy, dudx = np.gradient(U[0,:,:],dx)
+            dvdy, dvdx = np.gradient(V[0,:,:],dy)
+
+            dudy = np.expand_dims(dudy,axis=0)
+            dudx = np.expand_dims(dudx,axis=0)
+            dvdy = np.expand_dims(dvdy,axis=0)
+            dvdx = np.expand_dims(dvdx,axis=0)
+
+
         x= self.x
         y= self.y
         dt= self.dt
         nt = self.nt
+        velocity_idt = self.velocity_idt
+
 
         dt2 = dt/2.0
         counter=0
@@ -175,10 +222,11 @@ class Wave_tracing_FE():
 #            K3_xr = dt*self.f(xr[:,n] + 0.5*K2, t[k] + dt2)
 #            K4_xr = dt*self.f(xr[:,n] + K3, t[k] + dt)
 #            u_new = u[k] + (1/6.0)*(K1 + 2*K2 + 2*K3 + K4)
-            #logging.info("xr:{}".format(xr[:,n].shape))
-            #logging.info("yr:{}".format(yr.shape))
+            #logging.info("xr:{}".format(xr[:,:]))
+            #logging.info("y:{}".format(x.shape))
+            #logging.info("yr:{}".format(yr))
             #logging.info("idxs:{}".format(idxs.shape))
-            #logging.info("idys:{}".format(idys.shape))
+            #logging.info("idxs:{}".format(idys.shape))
             #logging.info("cg_x:{}".format(cg_i_x.shape))
             #logging.info("U:{}, nbx: {}, nby: {}".format(U.shape,idxs.shape,idys.shape))
             #logging.info("Uidx:{}".format(U[idys,idxs].shape))
@@ -189,17 +237,19 @@ class Wave_tracing_FE():
             #print(idxs)
             #print(idys)
             #print(xr.shape, U.shape, cg_i_x.shape)
-            xr[:,n+1] = xr[:,n] + dt*(cg_i_x+U[idys,idxs])
-            yr[:,n+1] = yr[:,n] + dt*(cg_i_y+V[idys,idxs])
+            #logger.info('idxs {}'.format(idxs))
+            #logger.info('idys {}'.format(idys))
+            xr[:,n+1] = xr[:,n] + dt*(cg_i_x+U[velocity_idt[n],idys,idxs])
+            yr[:,n+1] = yr[:,n] + dt*(cg_i_y+V[velocity_idt[n],idys,idxs])
 
 
-            kx[:,n+1] = kx[:,n] - dt*(kx[:,n]*dudx[idys,idxs] + ky[:,n]*dvdx[idys,idxs])
-            ky[:,n+1] = ky[:,n] - dt*(kx[:,n]*dudy[idys,idxs] + ky[:,n]*dvdy[idys,idxs])
+            kx[:,n+1] = kx[:,n] - dt*(kx[:,n]*dudx[velocity_idt[n],idys,idxs] + ky[:,n]*dvdx[velocity_idt[n],idys,idxs])
+            ky[:,n+1] = ky[:,n] - dt*(kx[:,n]*dudy[velocity_idt[n],idys,idxs] + ky[:,n]*dvdy[velocity_idt[n],idys,idxs])
             k[:,n+1] = np.sqrt(kx[:,n+1]**2+ky[:,n+1]**2)
-            counter += 1
+            counter += 5
             if counter==1:
                 logging.info(np.any(np.isnan(U[idys,idxs])))
-                #logging.info([idd for idd in idys])
+                logging.info(dt*n)
                 #logging.info([idd for idd in idxs])
                 #logging.info(idys)
                 #logging.info("idxs:{}".format(idys))
@@ -215,13 +265,18 @@ class Wave_tracing_FE():
             ky[:,n+1] = ky[:,n] - dt*(kx[:,n]*dudy[idys,idxs] + ky[:,n]*dvdy[idys,idxs])
             k[:,n+1] = np.sqrt(kx[:,n+1]**2+ky[:,n+1]**2)
             """
-
+        self.dudy = dudy
+        self.dudx = dudx
+        self.dvdy = dvdy
+        self.dvdx = dvdx
         self.k = k
         self.kx= kx
         self.ky= ky
         self.xr= xr
         self.yr= yr
         self.theta = theta
+        self
+        logging.info('Stoppet at time idt: {}'.format(velocity_idt[n]))
 
     def ray_density(self,x_increment, y_increment, plot=False):
         """ Method computing ray density within boxes. The density of wave rays
