@@ -275,7 +275,6 @@ class Wave_tracing_FE():
         self.xr= xr
         self.yr= yr
         self.theta = theta
-        self
         logging.info('Stoppet at time idt: {}'.format(velocity_idt[n]))
 
     def ray_density(self,x_increment, y_increment, plot=False):
@@ -366,7 +365,7 @@ if __name__ == '__main__':
     fig,ax = plt.subplots(figsize=(16,6))
     #pc=ax.pcolormesh(wt.x,wt.y,wt.U)
     #pc=ax.pcolormesh(np.arange(len(u_eastwards.X))*800,np.arange(len(u_eastwards.Y))*800,wt.U)
-    pc=ax.pcolormesh(X,Y,wt.U)
+    pc=ax.pcolormesh(X,Y,wt.U.isel(time=0))
     for i in range(wt.nb_wave_rays):
         #for i in range(wt.ny):
         #ax.plot(X[0].data+wt.xr[i,:],wt.yr[i,:],'-k')
