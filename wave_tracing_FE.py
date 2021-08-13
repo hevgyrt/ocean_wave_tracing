@@ -13,7 +13,7 @@ class Wave_tracing_FE():
     """
     def __init__(self, U, V,  nx, ny, nt, T, dx, dy, wave_period, theta0,
                  nb_wave_rays, domain_X0, domain_XN, domain_Y0, domain_YN,
-                 temporal_evolution=False, T0=None):
+                 incoming_wave_direction,temporal_evolution=False, T0=None):
         """
         Args:
             U (float): eastward velocity 2D field
@@ -29,6 +29,8 @@ class Wave_tracing_FE():
             nb_wave_rays (int): Number of wave rays to track
             domain_*0 (float): start value of domain area in X and Y direction
             domain_*N (float): end value of domain area in X and Y direction
+            incoming_wave_direction (str): side for incoming wave direction
+                                        [left, right, top, bottom]
 
             temporal_evolution (bool): flag if velocity field should change in time
         """
