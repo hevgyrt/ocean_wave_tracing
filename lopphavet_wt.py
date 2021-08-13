@@ -80,7 +80,7 @@ ax.set_ylim([0,100])
 
 fig.tight_layout()
 ax.tick_params(axis='both',labelsize=fs-4)
-fig.savefig('figures/ray_tracing_lopphavet.png',dpi=180, transparent=True)
+#fig.savefig('figures/ray_tracing_lopphavet.png',dpi=180, transparent=True)
 
 plt.show()
 
