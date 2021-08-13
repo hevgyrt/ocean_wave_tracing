@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import logging
 import xarray as xa
+import pyproj
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename='wave_tracing.log', level=logging.INFO)
 logging.info('\nStarted')
@@ -47,6 +48,7 @@ class Wave_tracing_FE():
         self.domain_YN = domain_YN
 
         self.temporal_evolution = temporal_evolution
+
 
         # Setting up X and Y domain
         self.x = np.linspace(domain_X0, domain_XN, nx)
@@ -105,9 +107,10 @@ class Wave_tracing_FE():
         idx = (np.abs(array - value)).argmin()
         return idx
 
+
     def c_intrinsic(self,k,group_velocity=False):
         """ Method computing intrinsic wave phase and group velocity according
-        to deep water dispersion relation
+        to the general dispersion relation
 
         Args:
             k: wave number
@@ -119,10 +122,12 @@ class Wave_tracing_FE():
                 flag
         """
         g=self.g
+
         if group_velocity:
             return 0.5*np.sqrt(g/k)
         else:
-            return np.sqrt(g/k)
+            return 0.5*np.sqrt(g/k)
+
 
     def wave(self,T,theta):
         """ Method computing deep water wave properties
@@ -316,6 +321,20 @@ class Wave_tracing_FE():
 
         return xx,yy,hm
 
+    def to_latlon(self, proj4, flip_xy=False):
+        lats = np.zeros((self.nb_wave_rays,self.nt))
+        lons = np.zeros((self.nb_wave_rays,self.nt))
+        if not flip_xy:
+            for i in range(self.nb_wave_rays):
+                lons[i,:],lats[i,:] = pyproj.Transformer.from_proj(proj4,'epsg:4326', always_xy=True).transform(self.xr[i,:], self.yr[i,:])
+        else:
+            for i in range(self.nb_wave_rays):
+                lons[i,:],lats[i,:] = pyproj.Transformer.from_proj(proj4,'epsg:4326', always_xy=True).transform(self.yr[i,:], self.xr[i,:])
+
+
+        return lons, lats
+
+
 
 
 
@@ -372,4 +391,32 @@ if __name__ == '__main__':
         ax.plot(wt.xr[i,:],wt.yr[i,:],'-k')
     cb = fig.colorbar(pc)
                 #fig.savefig('T3')
+    plt.show()
+
+
+    proj4='+proj=stere +ellps=WGS84 +lat_0=90.0 +lat_ts=60.0 +x_0=3192800 +y_0=1784000 +lon_0=70'
+    lons,lats=wt.to_latlon(proj4)
+
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+    fig, ax = plt.subplots(frameon=False,figsize=(7,7),subplot_kw={'projection': ccrs.Mercator()})
+
+    for i in range(wt.nb_wave_rays):
+        ax.plot(lons[i,:],lats[i,:],'-k',transform=ccrs.PlateCarree())
+
+    # Deciding extent
+    lonmin, lonmax, latmin, latmax = 7,15.0,65,70
+    ax.set_extent([lonmin, lonmax, latmin, latmax]) #x0, x1, y0, y1) of the map in the given coordinate system.
+
+    # adding coastline
+
+    lscale = 'auto' # Scale for coasline
+    f = cfeature.GSHHSFeature(scale=lscale, levels=[1],
+            facecolor=cfeature.COLORS['land'])
+    ax.add_geometries(
+            f.intersecting_geometries([lonmin, lonmax, latmin, latmax]),
+            ccrs.PlateCarree(),
+            facecolor=cfeature.COLORS['land_alt1'],
+            edgecolor='black')
+
     plt.show()
