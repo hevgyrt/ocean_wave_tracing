@@ -4,16 +4,16 @@ from wave_tracing_FE import Wave_tracing_FE
 import xarray as xa
 import cmocean
 
-idt=5 #22
-idx0 = 100
+idt0=5 #22
+idx0 = 0
+idyN = 180
 u_eastwards = xa.open_dataset('current_forcing/u_eastward_senja.nc')
 v_northwards = xa.open_dataset('current_forcing/v_northward_senja.nc')
-data_time = str(u_eastwards.isel(time=idt).time.data).split(':')[0]
-U = np.fliplr(u_eastwards.isel(time=idt).to_array()[0,:-idx0,:].data.T)
-V = np.fliplr(v_northwards.isel(time=idt).to_array()[0,:-idx0,:].data.T)
+data_time = str(u_eastwards.isel(time=idt0).time.data).split(':')[0]
+print(data_time)
 
-X = u_eastwards.Y[idx0:]
-Y = u_eastwards.X
+X = u_eastwards.X[idx0::]
+Y = u_eastwards.Y[:idyN]
 nx = len(X)#U.shape[1]
 ny = len(Y)#U.shape[0]
 #nx = 100
@@ -21,27 +21,77 @@ ny = len(Y)#U.shape[0]
 dx=dy=800
 nb_wave_rays = 150#330 #350
 
-T = 20000
+T = 28000
 print("T={}h".format(T/3600))
-nt = 3000
-wave_period = 8
+nt = 3500
+wave_period = 7
 #theta0 = [(2.5*np.pi)/180, (-2.5*np.pi)/180, (5*np.pi)/180, (-5*np.pi)/180,0] #np.pi/10
-central_angle = 53#53
-theta0 = [#-((central_angle+2.5)*np.pi)/180,-((central_angle+1.25)*np.pi)/180,
-          #-((central_angle-2.5)*np.pi)/180,-((central_angle-1.25)*np.pi)/180,
-          -(central_angle*np.pi)/180]#,-(55*np.pi)/180] #np.pi/10
+
+central_angle = 130#150
+
+theta0 = [-(central_angle*np.pi)/180]#,-(55*np.pi)/180] #np.pi/10
 X0, XN = X[0].data, X[-1].data
 Y0, YN = Y[0].data, Y[-1].data
 
 HM = []
 for th0 in theta0:
-    wt = Wave_tracing_FE(U, V, nx, ny, nt,T,dx,dy, wave_period, th0,nb_wave_rays=nb_wave_rays,
+    wt = Wave_tracing_FE(u_eastwards.u_eastward.isel(Y=[i for i in range(idyN)]).isel(time=idt0),
+                         v_northwards.v_northward.isel(Y=[i for i in range(idyN)]).isel(time=idt0),
+                        nx, ny, nt,T,dx,dy, wave_period, th0,nb_wave_rays=nb_wave_rays,
                         domain_X0=X0, domain_XN=XN,
-                        domain_Y0=Y0, domain_YN=YN, temporal_evolution=False)
+                        domain_Y0=Y0, domain_YN=YN, temporal_evolution=False, incoming_wave_side='top')
     wt.set_initial_condition()
     wt.solve()
-    xx,yy,hm = wt.ray_density(3,5)
 
+
+### PLOTTING
+# Georeference
+proj4='+proj=stere +ellps=WGS84 +lat_0=90.0 +lat_ts=60.0 +x_0=3192800 +y_0=1784000 +lon_0=70' #NK800
+lons,lats=wt.to_latlon(proj4)
+
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+
+
+# read wam data:
+model_period = '20190201'
+wam_diff = xa.open_dataset('/lustre/storeB/users/trygveh/data/moskenes/wam/wam_diff_{}00.nc'.format(model_period), decode_cf=True)
+wam_coord = xa.open_dataset('/lustre/storeB/users/trygveh/data/moskenes/wam/TRUEcoordDepthc1exte.nc')
+
+idt = 438
+
+wam_lat = wam_coord.latitude
+wam_lon = wam_coord.longitude
+
+hs_diff_max = .75#np.abs(wam_diff.hs[idt,:,:]).max()
+
+
+fig2, ax2 = plt.subplots(frameon=False,figsize=(8,10),subplot_kw={'projection': ccrs.Mercator(), 'facecolor':"gray"})
+
+cf2=ax2.pcolormesh(wam_lon, wam_lat, wam_diff.hs[idt,:,:], cmap=cmocean.cm.balance,
+                       transform=ccrs.PlateCarree(),vmin=-hs_diff_max,vmax=hs_diff_max)
+
+for i in range(0,wt.nb_wave_rays,1):
+    ax2.plot(lons[i,:],lats[i,:],'-k',transform=ccrs.PlateCarree(),alpha=0.3)
+
+ax2.coastlines()
+ax2.set_extent([16.5, 19, 69.3, 70.2], crs=ccrs.PlateCarree())
+#fig2.savefig('figures/ray_tracing_senja_{}.png'.format(data_time),dpi=180, transparent=False)
+plt.show()
+
+
+vorticity = wt.dvdx-wt.dudy
+fig,ax = plt.subplots(figsize=(16,6))
+
+pc=ax.pcolormesh(X,Y,vorticity[0],shading='auto',cmap=cmocean.cm.balance,vmin=-0.0006,vmax=0.0006)
+
+ax.plot(wt.xr[:,0],wt.yr[:,0],'o')
+
+for i in range(wt.nb_wave_rays):
+    ax.plot(wt.xr[i,:],wt.yr[i,:],'-k')
+cb = fig.colorbar(pc)
+plt.show()
+"""
 ### PLOTTING
 import matplotlib.colors as colors
 
@@ -110,7 +160,6 @@ plt.show()
 
 
 
-"""
 fig,ax = plt.subplots(figsize=(8,10))
 
 plot_X0, plot_XN = X0, 68.2*1e4

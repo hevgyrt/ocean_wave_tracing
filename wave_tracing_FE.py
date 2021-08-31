@@ -69,6 +69,8 @@ class Wave_tracing_FE():
         self.ky = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
         self.k = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
         self.theta = np.ma.zeros((nb_wave_rays,nt))
+        self.dudm = np.ma.zeros((nb_wave_rays,nt))
+        self.dvdm = np.ma.zeros((nb_wave_rays,nt))
 
 
         # make xarray data array of velocity field
@@ -98,6 +100,9 @@ class Wave_tracing_FE():
             self.velocity_idt = np.array([self.find_nearest(t_velocity_field,t_wr[i]) for i in range(len(t_wr))])
             logging.info('Vel idt : {}'.format(self.velocity_idt))
             logging.info('lengtsh: {}, {}'.format(len(self.velocity_idt),nt))
+
+
+        # TEST
 
 
 
@@ -176,8 +181,8 @@ class Wave_tracing_FE():
             self.xr[:,0]=np.linspace(self.domain_X0, self.domain_XN, self.nb_wave_rays)
             self.yr[:,0]=self.domain_YN
         elif self.i_w_side == 'bottom':
-            self.xr[:,0]=self.domain_Y0
-            self.yr[:,0]=np.linspace(self.domain_X0, self.domain_XN, self.nb_wave_rays)
+            self.xr[:,0]=np.linspace(self.domain_X0, self.domain_XN, self.nb_wave_rays)
+            self.yr[:,0]=self.domain_Y0
         else:
             logger.error('Invalid initial wave direcion. Terminating.')
             sys.exit()
@@ -185,7 +190,7 @@ class Wave_tracing_FE():
         self.kx[:,0]=kx0
         self.ky[:,0]=ky0
         self.k[:,0]=k0
-        logger.info('theta: {}, {}'.format(theta0,np.arctan(ky0/kx0)))
+        logger.info('theta: {}, {}'.format(self.theta0,np.arctan(ky0/kx0)))
         self.theta[:,0] = self.theta0#np.arctan(ky0/kx0) # self.theta0
 
     def solve(self):
@@ -242,8 +247,13 @@ class Wave_tracing_FE():
                 id_p1 = idys +1
                 id_p1[id_p1>=self.ny] = self.ny-1
                 dm = y[id_p1] - y[idys]
+                #logging.info('TEST: {}'.format(dm))
+
                 dudm = (U[velocity_idt[n],id_p1,idxs] - U[velocity_idt[n],idys,idxs])/dm
                 dvdm = (V[velocity_idt[n],id_p1,idxs] - V[velocity_idt[n],idys,idxs])/dm
+
+                self.dudm[:,n+1]=dudm
+                self.dvdm[:,n+1]=dvdm
 
             elif self.i_w_side == 'top' or self.i_w_side == 'bottom':
                 id_p1 = idxs +1
@@ -251,6 +261,8 @@ class Wave_tracing_FE():
                 dm = x[id_p1] - x[idxs]
                 dudm = (U[velocity_idt[n],idys,id_p1] - U[velocity_idt[n],idys,idxs])/dm
                 dvdm = (V[velocity_idt[n],idys,id_p1] - V[velocity_idt[n],idys,idxs])/dm
+                self.dudm[:,n+1]=dudm
+                self.dvdm[:,n+1]=dvdm
 
             theta[:,n+1] = theta[:,n] - dt*(1/k[:,n])*(kx[:,n]*dudm + ky[:,n]*dvdm)#  dt*dudm
             #theta[:,n+1] = np.arctan(ky[:,n]/kx[:,n])
@@ -272,7 +284,7 @@ class Wave_tracing_FE():
 
             # Logging purposes
             counter += 1
-            if counter==3 or counter==1000:
+            if counter==220 or counter==600:
                 #logging.info(np.any(np.isnan(U[idys,idxs])))
                 #logging.info(dt*n)
                 #dm = np.sqrt(np.gradient(xr[:,n])**2 + np.gradient(yr[:,n])**2)
@@ -281,7 +293,9 @@ class Wave_tracing_FE():
                 #logging.info(np.gradient(U[velocity_idt[n],idys,idxs],dm))
                 #logging.info([idd for idd in idxs])
 
-                logging.info("idxs:{}".format(cg_i_y))
+                logging.info(idxs)
+                #logging.info("dudm:{}".format(dm))
+                #logging.info("theta:{}".format(theta[:,n+1]))
                 #logging.info("x:{}".format(x))
                 #break
 
@@ -385,36 +399,67 @@ if __name__ == '__main__':
     U = (np.ones((nx,ny))*U_y).T
     V = np.zeros((ny,nx))
     """
-    u_eastwards = xa.open_dataset('u_eastwards.nc')
-    v_northwards = xa.open_dataset('v_northward.nc')
-    U = u_eastwards.isel(time=1).to_array()[0].data
-    V = v_northwards.isel(time=1).to_array()[0].data
 
-    # For testing
-    #U = np.zeros(U.shape)
-    #V = np.zeros(U.shape)
+    test = 'eddy' #lofoten, eddy
 
-    X = u_eastwards.X
-    Y = u_eastwards.Y
-    nx = U.shape[1]
-    ny = U.shape[0]
-    nb_wave_rays = 120
-    dx=dy=800
+    if test=='lofoten':
+        u_eastwards = xa.open_dataset('u_eastwards.nc')
+        v_northwards = xa.open_dataset('v_northward.nc')
+        U = u_eastwards.isel(time=1).to_array()[0].data
+        V = v_northwards.isel(time=1).to_array()[0].data
+        X = u_eastwards.X
+        Y = u_eastwards.Y
+        nx = U.shape[1]
+        ny = U.shape[0]
+        nb_wave_rays = 120
+        dx=dy=800
+        T = 31000 #Total duration
+        print("T={}h".format(T/3600))
+        nt = 3000 # Nb time steps
+        wave_period = 10
 
-    T = 31000 #Total duration
-    print("T={}h".format(T/3600))
-    nt = 3000 # Nb time steps
-    wave_period = 10
 
-    i_w_side = 'left'#'top'
+
+        X0, XN = X[0].data,X[-1].data
+        Y0, YN = Y[0].data,Y[-1].data
+
+    elif test=='eddy':
+        idt0=15 #22
+        ncin = xa.open_dataset('eddy.nc')
+        U = ncin.U[idt0::,:,:]
+        V = ncin.V[idt0::,:,:]
+        X = ncin.x.data
+        Y = ncin.y.data
+        nx = len(Y)
+        ny = len(X)
+        dx=dy=X[1]-X[0]
+        nb_wave_rays = 200#550#nx
+        T = 3000
+        print("T={}h".format(T/3600))
+        nt = 1500
+        wave_period = 10
+        #X0, XN = Y[0], Y[-1] #NOTE THIS
+        #Y0, YN = X[0], X[-1] #NOTE THIS
+        X0, XN = Y[0], Y[-1] #NOTE THIS
+        Y0, YN = X[0], X[-1] #NOTE THIS
+
+
+
+
+
+    i_w_side = 'bottom'#'top'
     if i_w_side == 'left':
         theta0 = 0 #Initial wave propagation direction
     elif i_w_side == 'top':
-        theta0 = 1.4*np.pi#0#np.pi/8 #Initial wave propagation direction
+        theta0 = 1.5*np.pi#0#np.pi/8 #Initial wave propagation direction
+    elif i_w_side == 'right':
+        theta0 = 1*np.pi#0#np.pi/8 #Initial wave propagation direction
+    elif i_w_side == 'bottom':
+        theta0 = 0.5*np.pi#0#np.pi/8 #Initial wave propagation direction
 
     wt = Wave_tracing_FE(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
-                        domain_X0=X[0].data, domain_XN=X[-1].data,
-                        domain_Y0=Y[0].data, domain_YN=Y[-1].data,
+                        domain_X0=X0, domain_XN=XN,
+                        domain_Y0=Y0, domain_YN=YN,
                         incoming_wave_side=i_w_side)
     wt.set_initial_condition()
     wt.solve()
@@ -423,27 +468,32 @@ if __name__ == '__main__':
 
     ### PLOTTING ###
     fig,ax = plt.subplots(figsize=(16,6))
-
-    pc=ax.pcolormesh(X,Y,wt.U.isel(time=0),shading='auto')
+    if test=='lofoten':
+        pc=ax.pcolormesh(X,Y,wt.U.isel(time=0),shading='auto')
+    elif test=='eddy':
+        vorticity = wt.dvdx-wt.dudy
+        pc=ax.pcolormesh(Y,X,vorticity[0,:,:],shading='auto',cmap='bwr',
+                         vmin=-0.0004,vmax=0.0004)
 
     ax.plot(wt.xr[:,0],wt.yr[:,0],'o')
-
-    for i in range(wt.nb_wave_rays):
+    step=2
+    for i in range(0,wt.nb_wave_rays,step):
         ax.plot(wt.xr[i,:],wt.yr[i,:],'-k')
     cb = fig.colorbar(pc)
                 #fig.savefig('T3')
 
-    # Georeference
-    proj4='+proj=stere +ellps=WGS84 +lat_0=90.0 +lat_ts=60.0 +x_0=3192800 +y_0=1784000 +lon_0=70' #NK800
-    lons,lats=wt.to_latlon(proj4)
+    if test == 'lofoten':
+        # Georeference
+        proj4='+proj=stere +ellps=WGS84 +lat_0=90.0 +lat_ts=60.0 +x_0=3192800 +y_0=1784000 +lon_0=70' #NK800
+        lons,lats=wt.to_latlon(proj4)
 
-    import cartopy.crs as ccrs
-    import cartopy.feature as cfeature
-    fig2, ax2 = plt.subplots(frameon=False,figsize=(7,7),subplot_kw={'projection': ccrs.Mercator()})
+        import cartopy.crs as ccrs
+        import cartopy.feature as cfeature
+        fig2, ax2 = plt.subplots(frameon=False,figsize=(7,7),subplot_kw={'projection': ccrs.Mercator()})
 
-    for i in range(wt.nb_wave_rays):
-        ax2.plot(lons[i,:],lats[i,:],'-k',transform=ccrs.PlateCarree())
+        for i in range(wt.nb_wave_rays):
+            ax2.plot(lons[i,:],lats[i,:],'-k',transform=ccrs.PlateCarree())
 
-    ax2.coastlines()
+        ax2.coastlines()
 
     plt.show()

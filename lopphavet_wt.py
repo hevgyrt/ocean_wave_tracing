@@ -9,49 +9,70 @@ idx0 = 0
 u_eastwards = xa.open_dataset('current_forcing/u_eastward_lopphavet.nc')
 v_northwards = xa.open_dataset('current_forcing/v_northward_lopphavet.nc')
 
-UU=[np.fliplr(u_eastwards.isel(time=i).transpose().to_array()[0]) for i in range(u_eastwards.time.size)]
-u_eastwards_data_array = xa.DataArray(UU,coords=[u_eastwards.time,u_eastwards.X,u_eastwards.Y], dims=['time','X','Y'])
-
-VV=[np.fliplr(v_northwards.isel(time=i).transpose().to_array()[0]) for i in range(v_northwards.time.size)]
-v_northwards_data_array = xa.DataArray(VV,coords=[v_northwards.time,v_northwards.X,v_northwards.Y], dims=['time','X','Y'])
-
 data_time = str(u_eastwards.isel(time=idt).time.data).split(':')[0]
-#U = np.fliplr(u_eastwards.isel(time=idt).to_array()[0,:-idx0,:].data.T)
-#V = np.fliplr(v_northwards.isel(time=idt).to_array()[0,:-idx0,:].data.T)
 
-X = u_eastwards.Y[idx0:]
-Y = u_eastwards.X
+X = u_eastwards.X#[idx0:]
+Y = u_eastwards.Y
 nx = len(X)#U.shape[1]
 ny = len(Y)#U.shape[0]
-#nx = 100
-#ny=40
 dx=dy=800
 nb_wave_rays = 150#330 #350
 
 T = 22000
 print("T={}h".format(T/3600))
-nt = 8000
-wave_period = 7
-#theta0 = [(2.5*np.pi)/180, (-2.5*np.pi)/180, (5*np.pi)/180, (-5*np.pi)/180,0] #np.pi/10
-central_angle = 59#53
-theta0 = [#-((central_angle+2.5)*np.pi)/180,-((central_angle+1.25)*np.pi)/180,
-          #-((central_angle-2.5)*np.pi)/180,-((central_angle-1.25)*np.pi)/180,
+nt = 12000#15000
+wave_period = 10
+central_angle = 153#148#149
+theta0 = [
           -(central_angle*np.pi)/180]#,-(55*np.pi)/180] #np.pi/10
 X0, XN = X[0].data, X[-1].data
 Y0, YN = Y[0].data, Y[-1].data
 
 HM = []
 for th0 in theta0:
-    #wt = Wave_tracing_FE(U, V, nx, ny, nt,T,dx,dy, wave_period, th0,nb_wave_rays=nb_wave_rays,
-    wt = Wave_tracing_FE(u_eastwards_data_array,v_northwards_data_array, nx, ny, nt,T,dx,dy, wave_period, th0,nb_wave_rays=nb_wave_rays,
+    wt = Wave_tracing_FE(u_eastwards.u_eastward,v_northwards.v_northward,
+                        nx, ny, nt,T,dx,dy, wave_period, th0,nb_wave_rays=nb_wave_rays,
                         domain_X0=X0, domain_XN=XN,
-                        domain_Y0=Y0, domain_YN=YN, temporal_evolution=True)
+                        domain_Y0=Y0, domain_YN=YN, temporal_evolution=True, incoming_wave_side='top')
     wt.set_initial_condition()
     wt.solve()
-    xx,yy,hm = wt.ray_density(3,5)
 
 ### PLOTTING
+# Georeference
+proj4='+proj=stere +ellps=WGS84 +lat_0=90.0 +lat_ts=60.0 +x_0=3192800 +y_0=1784000 +lon_0=70' #NK800
+lons,lats=wt.to_latlon(proj4)
 
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+
+
+# read wam data:
+model_period = '20190201'
+wam_diff = xa.open_dataset('/lustre/storeB/users/trygveh/data/moskenes/wam/wam_diff_{}00.nc'.format(model_period), decode_cf=True)
+wam_coord = xa.open_dataset('/lustre/storeB/users/trygveh/data/moskenes/wam/TRUEcoordDepthc1exte.nc')
+
+idt = 405
+
+wam_lat = wam_coord.latitude
+wam_lon = wam_coord.longitude
+
+hs_diff_max = .75#np.abs(wam_diff.hs[idt,:,:]).max()
+
+
+fig2, ax2 = plt.subplots(frameon=False,figsize=(8,10),subplot_kw={'projection': ccrs.Mercator(), 'facecolor':"gray"})
+
+cf2=ax2.pcolormesh(wam_lon, wam_lat, wam_diff.hs[idt,:,:], cmap=cmocean.cm.balance,
+                       transform=ccrs.PlateCarree(),vmin=-hs_diff_max,vmax=hs_diff_max)
+
+for i in range(0,wt.nb_wave_rays,1):
+    ax2.plot(lons[i,:],lats[i,:],'-',c='black',transform=ccrs.PlateCarree(),alpha=0.3)
+
+ax2.coastlines()
+ax2.set_extent([19.7, 22.1, 69.9, 70.8], crs=ccrs.PlateCarree())
+#fig2.savefig('figures/ray_tracing_lopphavet.png',dpi=180, transparent=False)
+plt.show()
+
+"""
 fs = 20
 land_mask = np.ma.ones(UU[0].shape)
 land_mask.mask=False
@@ -85,13 +106,6 @@ ax.tick_params(axis='both',labelsize=fs-4)
 plt.show()
 
 
-
-
-
-
-
-
-"""
 fig,ax = plt.subplots(figsize=(8,10))
 
 plot_X0, plot_XN = X0, 68.2*1e4
