@@ -140,7 +140,7 @@ class Wave_tracing_FE():
         if group_velocity:
             return 0.5*np.sqrt(g/k)
         else:
-            return 0.5*np.sqrt(g/k)
+            return np.sqrt(g/k)
 
 
     def wave(self,T,theta):
