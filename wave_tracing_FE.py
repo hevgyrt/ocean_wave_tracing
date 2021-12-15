@@ -102,9 +102,6 @@ class Wave_tracing_FE():
             logging.info('lengtsh: {}, {}'.format(len(self.velocity_idt),nt))
 
 
-        # TEST
-
-
 
     def find_nearest(self,array, value):
         """ Method for finding neares indicies to value in array
@@ -371,6 +368,7 @@ class Wave_tracing_FE():
         """
         lats = np.zeros((self.nb_wave_rays,self.nt))
         lons = np.zeros((self.nb_wave_rays,self.nt))
+        #print(pyproj.__dict__.keys())
         for i in range(self.nb_wave_rays):
             lons[i,:],lats[i,:] = pyproj.Transformer.from_proj(proj4,'epsg:4326', always_xy=True).transform(self.xr[i,:], self.yr[i,:])
 

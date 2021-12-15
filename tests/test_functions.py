@@ -71,6 +71,7 @@ def test_find_nearest(my_wave):
     assert my_wave.find_nearest(test_array,test_value) == 3
 
 """
+NOTE: There is an issue with pyrpoj not having the Transformer method in pytest, even though it is available in the conda env..
 def test_lat_lon(my_wave):
     my_wave.set_initial_condition()
     proj4='+proj=stere +ellps=WGS84 +lat_0=90.0 +lat_ts=60.0 +x_0=3192800 +y_0=1784000 +lon_0=70'

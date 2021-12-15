@@ -4,10 +4,10 @@ from wave_tracing_FE import Wave_tracing_FE
 import xarray as xa
 import cmocean
 
-idt=0 #22
+idt=4 #22
 idx0 = 0
-u_eastwards = xa.open_dataset('current_forcing/u_eastward_lopphavet.nc')
-v_northwards = xa.open_dataset('current_forcing/v_northward_lopphavet.nc')
+u_eastwards = xa.open_dataset('current_forcing/u_eastward_lopphavet_sub.nc')
+v_northwards = xa.open_dataset('current_forcing/v_northward_lopphavet_sub.nc')
 
 data_time = str(u_eastwards.isel(time=idt).time.data).split(':')[0]
 
@@ -16,12 +16,12 @@ Y = u_eastwards.Y
 nx = len(X)#U.shape[1]
 ny = len(Y)#U.shape[0]
 dx=dy=800
-nb_wave_rays = 150#330 #350
+nb_wave_rays = 180#330 #350
 
-T = 22000
+T = 1*3600##22000
 print("T={}h".format(T/3600))
-nt = 12000#15000
-wave_period = 10
+nt = 3000#15000
+wave_period = 7
 central_angle = 153#148#149
 theta0 = [
           -(central_angle*np.pi)/180]#,-(55*np.pi)/180] #np.pi/10
@@ -33,7 +33,7 @@ for th0 in theta0:
     wt = Wave_tracing_FE(u_eastwards.u_eastward,v_northwards.v_northward,
                         nx, ny, nt,T,dx,dy, wave_period, th0,nb_wave_rays=nb_wave_rays,
                         domain_X0=X0, domain_XN=XN,
-                        domain_Y0=Y0, domain_YN=YN, temporal_evolution=True, incoming_wave_side='top')
+                        domain_Y0=Y0, domain_YN=YN, temporal_evolution=False, incoming_wave_side='top')
     wt.set_initial_condition()
     wt.solve()
 
