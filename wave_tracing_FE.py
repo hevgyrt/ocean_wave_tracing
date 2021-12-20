@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(filename='wave_tracing.log', level=logging.INFO)
 logging.info('\nStarted')
 
+# TODO:
+#   - fix direction if >45 degrees. What is the nearest grid point in dm and ds
 
 
 class Wave_tracing_FE():
@@ -16,7 +18,8 @@ class Wave_tracing_FE():
     """
     def __init__(self, U, V,  nx, ny, nt, T, dx, dy, wave_period, theta0,
                  nb_wave_rays, domain_X0, domain_XN, domain_Y0, domain_YN,
-                 incoming_wave_side,temporal_evolution=False, T0=None):
+                 incoming_wave_side,temporal_evolution=False, T0=None,
+                 d=None):
         """
         Args:
             U (float): eastward velocity 2D field
@@ -58,6 +61,16 @@ class Wave_tracing_FE():
 
         self.temporal_evolution = temporal_evolution
 
+        if d is not None:
+            self.d = self.check_bathymetry(d)
+            self.ray_depth = np.zeros((nb_wave_rays,nt))
+            self.dd_ds= np.zeros((nb_wave_rays,nt))
+        else:
+            logging.warning('Hardcoding bathymetry if not given. Should be fixed')
+            self.d = np.ones((ny,nx))*30000
+            self.ray_depth = np.zeros((nb_wave_rays,nt))
+            self.dd_ds= np.zeros((nb_wave_rays,nt))
+
         # Setting up X and Y domain
         self.x = np.linspace(domain_X0, domain_XN, nx)
         self.y = np.linspace(domain_Y0, domain_YN, ny)
@@ -71,6 +84,11 @@ class Wave_tracing_FE():
         self.theta = np.ma.zeros((nb_wave_rays,nt))
         self.dudm = np.ma.zeros((nb_wave_rays,nt))
         self.dvdm = np.ma.zeros((nb_wave_rays,nt))
+
+        # Change in intrinsic frequency due to depth
+        self.dsigma_dm = np.ma.zeros((nb_wave_rays,nt))
+        self.dsigma_ds = np.ma.zeros((nb_wave_rays,nt))
+
 
 
         # make xarray data array of velocity field
@@ -101,7 +119,19 @@ class Wave_tracing_FE():
             logging.info('Vel idt : {}'.format(self.velocity_idt))
             logging.info('lengtsh: {}, {}'.format(len(self.velocity_idt),nt))
 
+    def check_bathymetry(self,d):
 
+        if np.any(d < 0) and np.any(d > 0):
+            logger.warning('Depth is defined as positive. Thus, negative depth will be treated as Land.')
+            d[d<0] = 0
+            return d
+
+        if np.any(d < 0):
+            logger.warning('Depth is defined as positive. Hence taking absolute value of input.')
+            d = np.abs(d)
+
+        d[d==0] = np.nan
+        return(d)
 
     def find_nearest(self,array, value):
         """ Method for finding neares indicies to value in array
@@ -118,7 +148,7 @@ class Wave_tracing_FE():
         return idx
 
 
-    def c_intrinsic(self,k,group_velocity=False):
+    def c_intrinsic(self,k,d=None,group_velocity=False):
         """ Method computing intrinsic wave phase and group velocity according
         to the general dispersion relation
 
@@ -134,10 +164,22 @@ class Wave_tracing_FE():
 
         g=self.g
 
-        if group_velocity:
-            return 0.5*np.sqrt(g/k)
+        if d is None:
+            c_in = np.sqrt(g/k)
+            print('Here {}'.format(c_in))
+            n=0.5
         else:
-            return np.sqrt(g/k)
+            #logger.info(d)
+            c_in = np.sqrt((g/k)*np.tanh(k*d)) #intrinsic
+            n = 0.5 * (1 + (2*k*d)/np.sinh(2*k*d))
+
+        if group_velocity:
+            return c_in*n
+            #return 0.5*np.sqrt(g/k)
+        else:
+            return c_in
+            #return np.sqrt(g/k)
+
 
 
     def wave(self,T,theta):
@@ -190,6 +232,29 @@ class Wave_tracing_FE():
         logger.info('theta: {}, {}'.format(self.theta0,np.arctan(ky0/kx0)))
         self.theta[:,0] = self.theta0#np.arctan(ky0/kx0) # self.theta0
 
+    def find_idx_idy_relative_to_wave_direction(self, idxs, idys, theta, orthogonal=False):
+        if orthogonal:
+            phi = (theta - (0.5*np.pi))%(2*np.pi)
+        else:
+            phi = theta
+
+        idxs_p1 = idxs.copy()
+        idys_p1 = idys.copy()
+
+        idxs_p1[np.where(~np.logical_and(phi>=(np.pi/4), phi<=((7*np.pi)/4)))] += 1 #Q1
+        idys_p1[np.where(np.logical_and(phi>((1*np.pi)/4), phi<((3*np.pi)/4)))] += 1 #Q2
+        idxs_p1[np.where(np.logical_and(phi>((3*np.pi)/4), phi<((5*np.pi)/4)))] -= 1 #Q3
+        idys_p1[np.where(np.logical_and(phi>((5*np.pi)/4), phi<((7*np.pi)/4)))] -= 1 #Q4
+
+        # Fixing indices outside domain
+        idxs_p1[idxs_p1<0] = 0
+        idxs_p1[idxs_p1>=self.nx] = self.nx-1
+        idys_p1[idys_p1<0] = 0
+        idys_p1[idys_p1>=self.ny] = self.ny-1
+
+        return(idxs_p1, idys_p1)
+
+
     def solve(self):
         """ Solve the geometrical optics equations numerically
         """
@@ -238,12 +303,56 @@ class Wave_tracing_FE():
             # find indices for each wave ray
             idxs = np.array([self.find_nearest(x,xval) for xval in xr[:,n]])
             idys = np.array([self.find_nearest(y,yval) for yval in yr[:,n]])
+            self.ray_depth[:,n] = self.d[idys,idxs]
 
             # compute the change in direction
             if self.i_w_side == 'right' or self.i_w_side == 'left':
+
+                # in m direction (orthogonal to wave propagation direction)
+                idxs_dm_p1, idys_dm_p1 = self.find_idx_idy_relative_to_wave_direction(idxs=idxs,
+                                         idys=idys, theta=theta[:,n],orthogonal=True)
+                dm=self.dx
+
+
+                dudm = (U[velocity_idt[n],idys_dm_p1,idxs_dm_p1] - U[velocity_idt[n],idys,idxs])/dm
+                dvdm = (V[velocity_idt[n],idys_dm_p1,idxs_dm_p1] - V[velocity_idt[n],idys,idxs])/dm
+
+                self.dudm[:,n+1]=dudm
+                self.dvdm[:,n+1]=dvdm
+
+                dsigma_dm = (-1)*(self.c_intrinsic(k[:,n],d=self.d[idys_dm_p1,idxs_dm_p1]) -
+                                self.c_intrinsic(k[:,n],d=self.d[idys,idxs]) )/dm
+                self.dsigma_dm[:,n+1] = dsigma_dm
+
+                # in s direction (wave propagation direction)
+                idxs_ds_p1, idys_ds_p1 = self.find_idx_idy_relative_to_wave_direction(idxs=idxs,
+                                         idys=idys, theta=theta[:,n],orthogonal=False)
+                ds=self.dx
+
+                dd_ds = (-1)*(self.d[idys_ds_p1,idxs_ds_p1] - self.d[idys,idxs])/ds
+
+                dsigma_ds = (-1)*(self.c_intrinsic(k[:,n],d=self.d[idys_ds_p1,idxs_ds_p1]) -
+                                self.c_intrinsic(k[:,n],d=self.d[idys,idxs]) )/ds
+
+                self.dsigma_ds[:,n+1] = dsigma_ds
+                self.dd_ds[:,n+1] = dd_ds
+
+
+                #logging.info(idys_ds_p1)
+                #logging.info(idys_dm_p1)
+                #logging.info(self.c_intrinsic(k[:,n],d=self.d[idys_dm_p1,idxs_dm_p1]))
+                #logging.info(self.d[idys_dm_p1,idxs_dm_p1])
+                #break
+
+
+                """
+                #dm
                 id_p1 = idys +1
                 id_p1[id_p1>=self.ny] = self.ny-1
                 dm = y[id_p1] - y[idys]
+
+                #ds
+
                 #logging.info('TEST: {}'.format(dm))
 
                 dudm = (U[velocity_idt[n],id_p1,idxs] - U[velocity_idt[n],idys,idxs])/dm
@@ -252,20 +361,38 @@ class Wave_tracing_FE():
                 self.dudm[:,n+1]=dudm
                 self.dvdm[:,n+1]=dvdm
 
+                dsigma_dm = ( self.c_intrinsic(k[:,n],d=self.d[id_p1,idxs]) -
+                                self.c_intrinsic(k[:,n],d=self.d[idys,idxs]) )/dm
+                self.dsigma_dm[:,n+1] = dsigma_dm
+                """
+
             elif self.i_w_side == 'top' or self.i_w_side == 'bottom':
+                #dm
                 id_p1 = idxs +1
                 id_p1[id_p1>=self.nx] = self.nx-1
                 dm = x[id_p1] - x[idxs]
+
+
+
                 dudm = (U[velocity_idt[n],idys,id_p1] - U[velocity_idt[n],idys,idxs])/dm
                 dvdm = (V[velocity_idt[n],idys,id_p1] - V[velocity_idt[n],idys,idxs])/dm
                 self.dudm[:,n+1]=dudm
                 self.dvdm[:,n+1]=dvdm
 
-            theta[:,n+1] = theta[:,n] - dt*(1/k[:,n])*(kx[:,n]*dudm + ky[:,n]*dvdm)#  dt*dudm
+
+                dsigma_dm = (self.c_intrinsic(k[:,n],d=self.d[idys,id_p1]) -
+                                self.c_intrinsic(k[:,n],d=self.d[idys,idxs]) )/dm
+                self.dsigma_dm[:,n+1] = dsigma_dm
+
+            theta[:,n+1] = theta[:,n] - dt*(1/k[:,n])*(dsigma_dm + kx[:,n]*dudm + ky[:,n]*dvdm)#  varying depth
+            theta[:,n+1] = theta[:,n+1]%(2*np.pi) #keep angles between 0 and 2pi
+
+            #theta[:,n+1] = theta[:,n] - dt*(1/k[:,n])*(kx[:,n]*dudm + ky[:,n]*dvdm)#  deep water
             #theta[:,n+1] = np.arctan(ky[:,n]/kx[:,n])
 
             # Compute group velocity
-            cg_i = self.c_intrinsic(k[:,n],group_velocity=True)
+            cg_i = self.c_intrinsic(k[:,n],d=self.d[idys,idxs],group_velocity=True)
+            #cg_i = self.c_intrinsic(k[:,n],group_velocity=True) # deep water
 
             cg_i_x =  cg_i*np.cos(theta[:,n])
             cg_i_y =  cg_i*np.sin(theta[:,n])
@@ -275,13 +402,16 @@ class Wave_tracing_FE():
             yr[:,n+1] = yr[:,n] + dt*(cg_i_y+V[velocity_idt[n],idys,idxs])
 
             # Evolution in wave number
-            kx[:,n+1] = kx[:,n] - dt*(kx[:,n]*dudx[velocity_idt[n],idys,idxs] + ky[:,n]*dvdx[velocity_idt[n],idys,idxs])
-            ky[:,n+1] = ky[:,n] - dt*(kx[:,n]*dudy[velocity_idt[n],idys,idxs] + ky[:,n]*dvdy[velocity_idt[n],idys,idxs])
+            kx[:,n+1] = kx[:,n] - dt*(dsigma_ds*dd_ds + kx[:,n]*dudx[velocity_idt[n],idys,idxs] + ky[:,n]*dvdx[velocity_idt[n],idys,idxs])
+            ky[:,n+1] = ky[:,n] - dt*(dsigma_ds*dd_ds + kx[:,n]*dudy[velocity_idt[n],idys,idxs] + ky[:,n]*dvdy[velocity_idt[n],idys,idxs])
+            #kx[:,n+1] = kx[:,n] - dt*(kx[:,n]*dudx[velocity_idt[n],idys,idxs] + ky[:,n]*dvdx[velocity_idt[n],idys,idxs])
+            #ky[:,n+1] = ky[:,n] - dt*(kx[:,n]*dudy[velocity_idt[n],idys,idxs] + ky[:,n]*dvdy[velocity_idt[n],idys,idxs])
             k[:,n+1] = np.sqrt(kx[:,n+1]**2+ky[:,n+1]**2)
 
             # Logging purposes
             counter += 1
-            if counter==220 or counter==600:
+            if counter in range(850,930,50):
+                wr_id = 75
                 #logging.info(np.any(np.isnan(U[idys,idxs])))
                 #logging.info(dt*n)
                 #dm = np.sqrt(np.gradient(xr[:,n])**2 + np.gradient(yr[:,n])**2)
@@ -290,11 +420,32 @@ class Wave_tracing_FE():
                 #logging.info(np.gradient(U[velocity_idt[n],idys,idxs],dm))
                 #logging.info([idd for idd in idxs])
 
-                logging.info(idxs)
-                #logging.info("dudm:{}".format(dm))
+                #logging.info(cg_i[wr_id])
+                logging.info("n: {}, dsigma_dm:{}".format(n+1,dsigma_dm[wr_id]))
+                logging.info("dsigma_ds dd_ds: {}".format(dsigma_ds[wr_id]*dd_ds[wr_id]))
+                logging.info("dd_ds: {}".format(dd_ds[wr_id]))
                 #logging.info("theta:{}".format(theta[:,n+1]))
                 #logging.info("x:{}".format(x))
                 #break
+                fig,ax = plt.subplots(figsize=(16,6))
+                pc=ax.pcolormesh(self.x,self.y,-self.d,shading='auto',cmap='viridis')
+                #step=2
+                #for i in range(0,wt.nb_wave_rays,step):
+                #    ax.plot(self.xr[i,:n+1],self.yr[i,:n+1],'-k')
+
+                ax.plot(self.xr[wr_id,:n+1],self.yr[wr_id,:n+1],'-k')
+
+                ax.plot(self.x[idxs[wr_id]],self.y[idys[wr_id]],'bo')
+                ax.plot(self.x[idxs_dm_p1[wr_id]],self.y[idys_dm_p1[wr_id]],'rs',alpha=0.4)
+                ax.plot(self.x[idxs_ds_p1[wr_id]],self.y[idys_ds_p1[wr_id]],'ms',alpha=0.4)
+                cb = fig.colorbar(pc)
+                ax.set_title('idt: {}, theta: {}, cg:{}'.format(counter,theta[wr_id,n+1],cg_i[wr_id]))
+                phi = (theta[wr_id,n+1] - (0.5*np.pi))%(2*np.pi)
+                print('theta: {}'.format(theta[wr_id,n+1],phi))
+                print('depth: {}'.format(self.d[idys[wr_id],idxs[wr_id]]))
+
+                plt.show()
+
 
             """ FE
             xr[:,n+1] = xr[:,n] + dt*(cg_i_x+U[idys,idxs])
@@ -398,7 +549,8 @@ if __name__ == '__main__':
     V = np.zeros((ny,nx))
     """
 
-    test = 'eddy' #lofoten, eddy
+    test = 'eddy' #lofoten, eddy, zero
+    bathymetry = True
 
     if test=='lofoten':
         u_eastwards = xa.open_dataset('u_eastwards.nc')
@@ -423,7 +575,7 @@ if __name__ == '__main__':
 
     elif test=='eddy':
         idt0=15 #22
-        ncin = xa.open_dataset('eddy.nc')
+        ncin = xa.open_dataset('idealized_input.nc')
         U = ncin.U[idt0::,:,:]
         V = ncin.V[idt0::,:,:]
         X = ncin.x.data
@@ -434,18 +586,41 @@ if __name__ == '__main__':
         nb_wave_rays = 200#550#nx
         T = 3000
         print("T={}h".format(T/3600))
-        nt = 1500
+        nt = 1900
+        wave_period = 7
+        #X0, XN = Y[0], Y[-1] #NOTE THIS
+        #Y0, YN = X[0], X[-1] #NOTE THIS
+        X0, XN = Y[0], Y[-1] #NOTE THIS
+        Y0, YN = X[0], X[-1] #NOTE THIS
+
+        if bathymetry:
+            d = ncin.bathymetry_1dy_slope.data
+
+    elif test=='zero':
+        idt0=15 #22
+        ncin = xa.open_dataset('idealized_input.nc')
+        U = ncin.U_zero[idt0::,:,:]
+        V = ncin.V_zero[idt0::,:,:]
+        X = ncin.x.data
+        Y = ncin.y.data
+        nx = len(Y)
+        ny = len(X)
+        dx=dy=X[1]-X[0]
+        nb_wave_rays = 200#550#nx
+        T = 2700
+        print("T={}h".format(T/3600))
+        nt = 1700
         wave_period = 10
         #X0, XN = Y[0], Y[-1] #NOTE THIS
         #Y0, YN = X[0], X[-1] #NOTE THIS
         X0, XN = Y[0], Y[-1] #NOTE THIS
         Y0, YN = X[0], X[-1] #NOTE THIS
 
+        if bathymetry:
+            #d = ncin.bathymetry_bm.data
+            d = ncin.bathymetry_1dy_slope.data
 
-
-
-
-    i_w_side = 'bottom'#'top'
+    i_w_side = 'left'#'top'
     if i_w_side == 'left':
         theta0 = 0 #Initial wave propagation direction
     elif i_w_side == 'top':
@@ -455,10 +630,17 @@ if __name__ == '__main__':
     elif i_w_side == 'bottom':
         theta0 = 0.5*np.pi#0#np.pi/8 #Initial wave propagation direction
 
-    wt = Wave_tracing_FE(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
-                        domain_X0=X0, domain_XN=XN,
-                        domain_Y0=Y0, domain_YN=YN,
-                        incoming_wave_side=i_w_side)
+
+    if bathymetry:
+        wt = Wave_tracing_FE(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
+                            domain_X0=X0, domain_XN=XN,
+                            domain_Y0=Y0, domain_YN=YN,
+                            incoming_wave_side=i_w_side,d=d)
+    else:
+        wt = Wave_tracing_FE(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
+                            domain_X0=X0, domain_XN=XN,
+                            domain_Y0=Y0, domain_YN=YN,
+                            incoming_wave_side=i_w_side)
     wt.set_initial_condition()
     wt.solve()
 
@@ -472,6 +654,9 @@ if __name__ == '__main__':
         vorticity = wt.dvdx-wt.dudy
         pc=ax.pcolormesh(Y,X,vorticity[0,:,:],shading='auto',cmap='bwr',
                          vmin=-0.0004,vmax=0.0004)
+    elif test=='zero' and bathymetry:
+        pc=ax.contourf(Y,X,-d,shading='auto',cmap='viridis',levels=25)
+        #pc=ax.contourf(Y,X,np.gradient(-d)[1],shading='auto',cmap='viridis')
 
     ax.plot(wt.xr[:,0],wt.yr[:,0],'o')
     step=2
