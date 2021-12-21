@@ -85,6 +85,8 @@ class Wave_tracing_FE():
         self.dudm = np.ma.zeros((nb_wave_rays,nt))
         self.dvdm = np.ma.zeros((nb_wave_rays,nt))
 
+        self.cg_i = np.ma.zeros((nb_wave_rays,nt)) #intrinsic group velocity
+
         # Change in intrinsic frequency due to depth
         self.dsigma_dm = np.ma.zeros((nb_wave_rays,nt))
         self.dsigma_ds = np.ma.zeros((nb_wave_rays,nt))
@@ -265,6 +267,7 @@ class Wave_tracing_FE():
         xr= self.xr
         yr= self.yr
         theta= self.theta
+        cg_i = self.cg_i
         logging.info(self.U.dims)
 
         dx = self.dx
@@ -306,46 +309,35 @@ class Wave_tracing_FE():
             self.ray_depth[:,n] = self.d[idys,idxs]
 
             # compute the change in direction
-            if self.i_w_side == 'right' or self.i_w_side == 'left':
-
-                # in m direction (orthogonal to wave propagation direction)
-                idxs_dm_p1, idys_dm_p1 = self.find_idx_idy_relative_to_wave_direction(idxs=idxs,
-                                         idys=idys, theta=theta[:,n],orthogonal=True)
-                dm=self.dx
-
-
-                dudm = (U[velocity_idt[n],idys_dm_p1,idxs_dm_p1] - U[velocity_idt[n],idys,idxs])/dm
-                dvdm = (V[velocity_idt[n],idys_dm_p1,idxs_dm_p1] - V[velocity_idt[n],idys,idxs])/dm
-
-                self.dudm[:,n+1]=dudm
-                self.dvdm[:,n+1]=dvdm
-
-                dsigma_dm = (-1)*(self.c_intrinsic(k[:,n],d=self.d[idys_dm_p1,idxs_dm_p1]) -
-                                self.c_intrinsic(k[:,n],d=self.d[idys,idxs]) )/dm
-                self.dsigma_dm[:,n+1] = dsigma_dm
-
-                # in s direction (wave propagation direction)
-                idxs_ds_p1, idys_ds_p1 = self.find_idx_idy_relative_to_wave_direction(idxs=idxs,
-                                         idys=idys, theta=theta[:,n],orthogonal=False)
-                ds=self.dx
-
-                dd_ds = (-1)*(self.d[idys_ds_p1,idxs_ds_p1] - self.d[idys,idxs])/ds
-
-                dsigma_ds = (-1)*(self.c_intrinsic(k[:,n],d=self.d[idys_ds_p1,idxs_ds_p1]) -
-                                self.c_intrinsic(k[:,n],d=self.d[idys,idxs]) )/ds
-
-                self.dsigma_ds[:,n+1] = dsigma_ds
-                self.dd_ds[:,n+1] = dd_ds
+            #if self.i_w_side == 'right' or self.i_w_side == 'left':
+            # in m direction (orthogonal to wave propagation direction)
+            idxs_dm_p1, idys_dm_p1 = self.find_idx_idy_relative_to_wave_direction(idxs=idxs,
+                                     idys=idys, theta=theta[:,n],orthogonal=True)
+            dm=self.dx
+            dudm = (U[velocity_idt[n],idys_dm_p1,idxs_dm_p1] - U[velocity_idt[n],idys,idxs])/dm
+            dvdm = (V[velocity_idt[n],idys_dm_p1,idxs_dm_p1] - V[velocity_idt[n],idys,idxs])/dm
+            self.dudm[:,n+1]=dudm
+            self.dvdm[:,n+1]=dvdm
+            dsigma_dm = (-1)*(self.c_intrinsic(k[:,n],d=self.d[idys_dm_p1,idxs_dm_p1]) -
+                            self.c_intrinsic(k[:,n],d=self.d[idys,idxs]) )/dm
+            self.dsigma_dm[:,n+1] = dsigma_dm
+            # in s direction (wave propagation direction)
+            idxs_ds_p1, idys_ds_p1 = self.find_idx_idy_relative_to_wave_direction(idxs=idxs,
+                                     idys=idys, theta=theta[:,n],orthogonal=False)
+            ds=self.dx
+            dd_ds = (-1)*(self.d[idys_ds_p1,idxs_ds_p1] - self.d[idys,idxs])/ds
+            dsigma_ds = (-1)*(self.c_intrinsic(k[:,n],d=self.d[idys_ds_p1,idxs_ds_p1]) -
+                            self.c_intrinsic(k[:,n],d=self.d[idys,idxs]) )/ds
+            self.dsigma_ds[:,n+1] = dsigma_ds
+            self.dd_ds[:,n+1] = dd_ds
+            #logging.info(idys_ds_p1)
+            #logging.info(idys_dm_p1)
+            #logging.info(self.c_intrinsic(k[:,n],d=self.d[idys_dm_p1,idxs_dm_p1]))
+            #logging.info(self.d[idys_dm_p1,idxs_dm_p1])
+            #break
 
 
-                #logging.info(idys_ds_p1)
-                #logging.info(idys_dm_p1)
-                #logging.info(self.c_intrinsic(k[:,n],d=self.d[idys_dm_p1,idxs_dm_p1]))
-                #logging.info(self.d[idys_dm_p1,idxs_dm_p1])
-                #break
-
-
-                """
+            """
                 #dm
                 id_p1 = idys +1
                 id_p1[id_p1>=self.ny] = self.ny-1
@@ -364,7 +356,6 @@ class Wave_tracing_FE():
                 dsigma_dm = ( self.c_intrinsic(k[:,n],d=self.d[id_p1,idxs]) -
                                 self.c_intrinsic(k[:,n],d=self.d[idys,idxs]) )/dm
                 self.dsigma_dm[:,n+1] = dsigma_dm
-                """
 
             elif self.i_w_side == 'top' or self.i_w_side == 'bottom':
                 #dm
@@ -383,6 +374,7 @@ class Wave_tracing_FE():
                 dsigma_dm = (self.c_intrinsic(k[:,n],d=self.d[idys,id_p1]) -
                                 self.c_intrinsic(k[:,n],d=self.d[idys,idxs]) )/dm
                 self.dsigma_dm[:,n+1] = dsigma_dm
+            """
 
             theta[:,n+1] = theta[:,n] - dt*(1/k[:,n])*(dsigma_dm + kx[:,n]*dudm + ky[:,n]*dvdm)#  varying depth
             theta[:,n+1] = theta[:,n+1]%(2*np.pi) #keep angles between 0 and 2pi
@@ -391,11 +383,11 @@ class Wave_tracing_FE():
             #theta[:,n+1] = np.arctan(ky[:,n]/kx[:,n])
 
             # Compute group velocity
-            cg_i = self.c_intrinsic(k[:,n],d=self.d[idys,idxs],group_velocity=True)
+            cg_i[:,n+1] = self.c_intrinsic(k[:,n],d=self.d[idys,idxs],group_velocity=True)
             #cg_i = self.c_intrinsic(k[:,n],group_velocity=True) # deep water
 
-            cg_i_x =  cg_i*np.cos(theta[:,n])
-            cg_i_y =  cg_i*np.sin(theta[:,n])
+            cg_i_x =  cg_i[:,n+1]*np.cos(theta[:,n])
+            cg_i_y =  cg_i[:,n+1]*np.sin(theta[:,n])
 
             # Advection
             xr[:,n+1] = xr[:,n] + dt*(cg_i_x+U[velocity_idt[n],idys,idxs])
@@ -447,15 +439,6 @@ class Wave_tracing_FE():
                 plt.show()
 
 
-            """ FE
-            xr[:,n+1] = xr[:,n] + dt*(cg_i_x+U[idys,idxs])
-            yr[:,n+1] = yr[:,n] + dt*(cg_i_y+V[idys,idxs])
-
-
-            kx[:,n+1] = kx[:,n] - dt*(kx[:,n]*dudx[idys,idxs] + ky[:,n]*dvdx[idys,idxs])
-            ky[:,n+1] = ky[:,n] - dt*(kx[:,n]*dudy[idys,idxs] + ky[:,n]*dvdy[idys,idxs])
-            k[:,n+1] = np.sqrt(kx[:,n+1]**2+ky[:,n+1]**2)
-            """
         self.dudy = dudy
         self.dudx = dudx
         self.dvdy = dvdy
@@ -466,6 +449,7 @@ class Wave_tracing_FE():
         self.xr= xr
         self.yr= yr
         self.theta = theta
+        self.cg_i = cg_i
         logging.info('Stoppet at time idt: {}'.format(velocity_idt[n]))
 
     def ray_density(self,x_increment, y_increment, plot=False):
@@ -533,24 +517,8 @@ if __name__ == '__main__':
     import xarray as xa
 
 
-    """
-    X = 3000 #m
-    Y = 1500 #m
-    nx, ny = (200,101)
-    x = np.linspace(0, X, nx)
-    y = np.linspace(-Y, Y, ny)
-    dx,dy = 15,15
-
-    U0 = -.1
-    Y = np.max(y)*2
-    U_y = U0*np.cos((np.pi*y)/Y)**2
-
-    U = (np.ones((nx,ny))*U_y).T
-    V = np.zeros((ny,nx))
-    """
-
-    test = 'eddy' #lofoten, eddy, zero
-    bathymetry = True
+    test = 'lofoten' #lofoten, eddy, zero
+    bathymetry = False
 
     if test=='lofoten':
         u_eastwards = xa.open_dataset('u_eastwards.nc')
@@ -617,10 +585,10 @@ if __name__ == '__main__':
         Y0, YN = X[0], X[-1] #NOTE THIS
 
         if bathymetry:
-            #d = ncin.bathymetry_bm.data
-            d = ncin.bathymetry_1dy_slope.data
+            d = ncin.bathymetry_bm.data
+            #d = ncin.bathymetry_1dy_slope.data
 
-    i_w_side = 'left'#'top'
+    i_w_side = 'top'#'top'
     if i_w_side == 'left':
         theta0 = 0 #Initial wave propagation direction
     elif i_w_side == 'top':
@@ -665,6 +633,7 @@ if __name__ == '__main__':
     cb = fig.colorbar(pc)
                 #fig.savefig('T3')
 
+
     if test == 'lofoten':
         # Georeference
         proj4='+proj=stere +ellps=WGS84 +lat_0=90.0 +lat_ts=60.0 +x_0=3192800 +y_0=1784000 +lon_0=70' #NK800
@@ -678,5 +647,32 @@ if __name__ == '__main__':
             ax2.plot(lons[i,:],lats[i,:],'-k',transform=ccrs.PlateCarree())
 
         ax2.coastlines()
+
+    plot_single_ray = True
+    if plot_single_ray:
+        ray_id = 75
+        idts = np.arange(200,1200,200)
+        fig3,ax3 = plt.subplots(nrows=4,ncols=1,figsize=(16,10),gridspec_kw={'height_ratios': [3, 1,1,1]})
+
+        pc=ax3[0].contourf(Y,X,-d,shading='auto',cmap='viridis',levels=25)
+        ax3[0].plot(wt.xr[ray_id,:],wt.yr[ray_id,:],'-k')
+        ax3[0].plot(wt.xr[ray_id,0],wt.yr[ray_id,0],'o')
+        ax3[0].plot(wt.xr[ray_id,idts],wt.yr[ray_id,idts],'rs')
+
+        ax3[1].plot(wt.ray_depth[ray_id,:]);
+        ax3[2].plot(wt.theta[ray_id,:])
+        ax3[3].plot(wt.cg_i[ray_id,:])
+
+        ax3[2].sharex(ax3[1])
+        ax3[3].sharex(ax3[1])
+
+        cb3 = fig3.colorbar(pc,ax=ax3[0])
+
+        for aax in [ax3[1],ax3[2],ax3[3]]:
+            for idt in idts:
+                aax.axvline(idt,c='r')
+            aax.grid()
+
+
 
     plt.show()
