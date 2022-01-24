@@ -487,7 +487,7 @@ if __name__ == '__main__':
     import xarray as xa
 
 
-    test = 'eddy' #lofoten, eddy, zero
+    test = 'zero' #lofoten, eddy, zero
     bathymetry = True
 
     if test=='lofoten':
