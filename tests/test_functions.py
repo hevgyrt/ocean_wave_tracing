@@ -65,6 +65,13 @@ def test_wave_celerity(my_wave):
     assert my_wave.c_intrinsic(my_wave.k[0,0],group_velocity=False) == ((2*np.pi/my_wave.wave_period)/ my_wave.k[0,0])
     assert my_wave.c_intrinsic(my_wave.k[0,0],group_velocity=True) == 0.5*((2*np.pi/my_wave.wave_period)/ my_wave.k[0,0])
 
+def test_intrinsic_frequency(my_wave):
+    my_wave.set_initial_condition()
+    k = my_wave.k[0,0]
+
+    assert my_wave.sigma(my_wave.k[0,0],d=1000) == pytest.approx(np.sqrt(9.81*k*np.tanh(k*1000)), 1e-3) # Deep water
+    assert my_wave.sigma(my_wave.k[0,0],d=25) == pytest.approx(np.sqrt(9.81*k*np.tanh(k*25)), 1e-3) # intermediate depth
+
 def test_wave_properties(my_wave):
     wave_period = my_wave.wave_period
 
