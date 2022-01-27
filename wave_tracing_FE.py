@@ -17,7 +17,7 @@ class Wave_tracing_FE():
     def __init__(self, U, V,  nx, ny, nt, T, dx, dy, wave_period, theta0,
                  nb_wave_rays, domain_X0, domain_XN, domain_Y0, domain_YN,
                  incoming_wave_side,temporal_evolution=False, T0=None,
-                 d=None):
+                 d=None,DEBUG=False):
         """
         Args:
             U (float): eastward velocity 2D field
@@ -60,6 +60,7 @@ class Wave_tracing_FE():
         self.i_w_side = incoming_wave_side
 
         self.temporal_evolution = temporal_evolution
+        self.debug = DEBUG
 
         if d is not None:
             self.d = self.check_bathymetry(d)
@@ -357,10 +358,6 @@ class Wave_tracing_FE():
         velocity_idt = self.velocity_idt
 
 
-        ### TEST ###
-        sig2d = wt.sigma(k[0,0],self.d)
-        dsigma_dy, dsigma_dx = np.gradient(sig2d,dx)
-
         counter=0
         for n in range(0,nt-1):
 
@@ -368,7 +365,7 @@ class Wave_tracing_FE():
             idxs = np.array([self.find_nearest(x,xval) for xval in xr[:,n]])
             idys = np.array([self.find_nearest(y,yval) for yval in yr[:,n]])
             self.ray_depth[:,n] = self.d[idys,idxs]
-
+            """
             # compute indices along wave crest
             idxs_dm_p1, idys_dm_p1 = self.find_idx_idy_relative_to_wave_direction(idxs=idxs,
                                      idys=idys, theta=theta[:,n],orthogonal=True)
@@ -393,6 +390,7 @@ class Wave_tracing_FE():
             dsigma_ds = (self.sigma(k[:,n],d=self.d[idys_ds_p1,idxs_ds_p1]) -
                             self.sigma(k[:,n],d=self.d[idys,idxs]) )/dm
             self.dsigma_ds[:,n+1] = dsigma_ds
+            """
 
 
             #======================================================
@@ -436,48 +434,56 @@ class Wave_tracing_FE():
 
             # Logging purposes
             counter += 1
-            if counter in range(713,715,1):
-                wr_id = 75 # wave ray ID
-                logging.info("dsigma_dm:{}".format(dsigma_dm[wr_id]))
-                logging.info("dsigma_ds:{}".format(dsigma_ds[wr_id]))
-                logging.info("phi: {}".format(np.cos(phi[wr_id])))
+            if self.debug:
+                #logging.info("dsigma_dm:{}".format(dsigma_dm[wr_id]))
+                #logging.info("dsigma_ds:{}".format(dsigma_ds[wr_id]))
+                #logging.info("phi: {}".format(np.cos(phi[wr_id])))
+                if counter in range(1690,1700,50):
+                    #wr_id = [20, 40, 105, 80, 130, 150, 170] # wave ray ID for illustration in idealized_input
+                    wr_id = [20, 40, 80,105] # wave ray ID
 
-                #break
+                    #break
 
-                idts = np.arange(200,770,200)
-                fs=12
-                fig3,ax3 = plt.subplots(nrows=4,ncols=1,figsize=(16,10),gridspec_kw={'height_ratios': [3, 1,1,1]})
-                pc=ax3[0].contourf(self.x,self.y,-self.d,shading='auto',cmap=cm.deep_r,levels=25)
+                    idts = np.arange(200,1000,200)
+                    fs=12
+                    fig3,ax3 = plt.subplots(nrows=4,ncols=1,figsize=(16,10),gridspec_kw={'height_ratios': [3, 1,1,1]})
+                    pc=ax3[0].contourf(self.x,self.y,-self.d,shading='auto',cmap=cm.deep_r,levels=25)
+                    for id in wr_id:
+                        ax3[0].plot(self.xr[id,:n+1],self.yr[id,:n+1],'-k')
+                    #ax3[0].plot(self.x[idxs[wr_id]],self.y[idys[wr_id]],'mo')
+                    #ax3[0].plot(self.x[idxs_dm_p1[wr_id]],self.y[idys_dm_p1[wr_id]],'rs',alpha=0.6, label='m coord')
+                    #ax3[0].plot(self.x[idxs_ds_p1[wr_id]],self.y[idys_ds_p1[wr_id]],'ks',alpha=0.6, label='s coord')
 
-                ax3[0].plot(self.xr[wr_id,:n+1],self.yr[wr_id,:n+1],'-k')
-                ax3[0].plot(self.x[idxs[wr_id]],self.y[idys[wr_id]],'bo')
-                ax3[0].plot(self.x[idxs_dm_p1[wr_id]],self.y[idys_dm_p1[wr_id]],'rs',alpha=0.6, label='m coord')
-                ax3[0].plot(self.x[idxs_ds_p1[wr_id]],self.y[idys_ds_p1[wr_id]],'ks',alpha=0.6, label='s coord')
+                    ax3[0].plot(wt.xr[wr_id[2],idts],wt.yr[wr_id[2],idts],marker='s',ms=7,color='tab:red',linestyle='none')
 
-                ax3[0].plot(wt.xr[wr_id,idts],wt.yr[wr_id,idts],marker='^',ms=10,color='tab:orange',linestyle='none')
+                    #ax3[0].legend()
+                    ax3[0].xaxis.tick_top()
 
-                ax3[0].legend()
-                ax3[0].xaxis.tick_top()
+                    ax3[1].plot(-wt.ray_depth[wr_id[2],:1090], label=r'$d(x_r,y_r)$')
+                    ax3[2].plot(wt.kx[wr_id[2],:1090], label=r'$k_x$')
+                    ax3[2].plot(wt.ky[wr_id[2],:1090], label=r'$k_y$',c='tab:green')
+                    ax3[3].plot(wt.theta[wr_id[2],:1090], label=r'$\theta$')
 
-                ax3[1].plot(wt.ray_depth[wr_id,:counter])
-                ax3[2].plot(wt.kx[wr_id,:counter])
-                ax3[3].plot(wt.ky[wr_id,:counter])
+                    ax3[2].sharex(ax3[1])
+                    ax3[3].sharex(ax3[1])
 
-                ax3[2].sharex(ax3[1])
-                ax3[3].sharex(ax3[1])
+                    cb3 = fig3.colorbar(pc,ax=ax3[0])
+                    cb3.ax.tick_params(labelsize=fs)
 
-                cb3 = fig3.colorbar(pc,ax=ax3[0])
-                cb3.ax.tick_params(labelsize=fs)
+                    for ii, aax in enumerate([ax3[1],ax3[2],ax3[3]]):
+                        for idt in idts:
+                            aax.axvline(idt,c='tab:red',lw=1.5)
+                        aax.grid()
+                        aax.legend(fontsize=fs+4)
 
-                for aax in [ax3[1],ax3[2],ax3[3]]:
-                    for idt in idts:
-                        aax.axvline(idt,c='tab:orange',lw=1.5)
-                    aax.grid()
+                    for aax in ax3:
+                        aax.tick_params(labelsize=fs)
 
-                for aax in ax3:
-                    aax.tick_params(labelsize=fs)
-
-                #plt.show()
+                    ax3[0].set_xlim([self.x[0],self.x[-1]])
+                    ax3[0].set_ylim([self.y[0],self.y[-1]])
+                    fig3.tight_layout()
+                    #fig3.savefig('/home/trygveh/documents/phd/papers/wave_ray_tracing/figures/POC.png',dpi=170)
+                    #plt.show()
 
 
         self.dudy = dudy
@@ -558,8 +564,8 @@ if __name__ == '__main__':
     import xarray as xa
 
 
-    test = 'zero' #lofoten, eddy, zero
-    bathymetry = True
+    test = 'lofoten' #lofoten, eddy, zero
+    bathymetry = False
 
     if test=='lofoten':
         u_eastwards = xa.open_dataset('u_eastwards.nc')
@@ -629,9 +635,9 @@ if __name__ == '__main__':
             #d = ncin.bathymetry_bm.data
             d = ncin.bathymetry_1dy_slope.data
 
-    i_w_side = 'bottom'#'top'
+    i_w_side = 'top'#'top'
     if i_w_side == 'left':
-        theta0 = 0.0 #Initial wave propagation direction
+        theta0 = 0.12 #Initial wave propagation direction
     elif i_w_side == 'top':
         theta0 = 1.5*np.pi#0#np.pi/8 #Initial wave propagation direction
     elif i_w_side == 'right':
@@ -644,12 +650,12 @@ if __name__ == '__main__':
         wt = Wave_tracing_FE(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
                             domain_X0=X0, domain_XN=XN,
                             domain_Y0=Y0, domain_YN=YN,
-                            incoming_wave_side=i_w_side,d=d)
+                            incoming_wave_side=i_w_side,d=d,DEBUG=True)
     else:
         wt = Wave_tracing_FE(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
                             domain_X0=X0, domain_XN=XN,
                             domain_Y0=Y0, domain_YN=YN,
-                            incoming_wave_side=i_w_side)
+                            incoming_wave_side=i_w_side,DEBUG=True)
     wt.set_initial_condition()
     wt.solve()
 
@@ -660,7 +666,7 @@ if __name__ == '__main__':
     if test=='lofoten':
         vorticity = wt.dvdx-wt.dudy
         pc=ax.pcolormesh(wt.x,wt.y,vorticity[0,:,:],shading='auto',cmap='bwr',
-                         vmin=-0.0004,vmax=0.0004)
+                         vmin=-0.0003,vmax=0.0003)
         #pc=ax.pcolormesh(X,Y,wt.U.isel(time=0),shading='auto')
     elif test=='eddy':
         vorticity = wt.dvdx-wt.dudy
@@ -692,13 +698,13 @@ if __name__ == '__main__':
         fig2, ax2 = plt.subplots(frameon=False,figsize=(7,7),subplot_kw={'projection': ccrs.Mercator()})
 
         pc2=ax2.pcolormesh(u_eastwards.lon,u_eastwards.lat,vorticity[0,:,:],shading='auto',cmap='bwr',
-                         vmin=-0.0004,vmax=0.0004, transform=ccrs.PlateCarree())
+                         vmin=-0.0003,vmax=0.0003, transform=ccrs.PlateCarree())
 
         for i in range(wt.nb_wave_rays):
-            ax2.plot(lons[i,:],lats[i,:],'-k',transform=ccrs.PlateCarree())
+            ax2.plot(lons[i,:],lats[i,:],'-k',transform=ccrs.PlateCarree(),alpha=0.6)
 
         ax2.coastlines()
-        cb2 = fig2.colorbar(pc2)
+        cb2 = fig2.colorbar(pc2, extend='both')
 
     plot_single_ray = True
     if plot_single_ray:
