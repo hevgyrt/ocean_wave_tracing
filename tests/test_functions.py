@@ -1,11 +1,12 @@
 import pytest
 import sys, os
 import numpy as np
+import pyproj
 testdir = os.path.dirname(os.getcwd() + '/')
 srcdir = '..'
 sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
-from wave_tracing_FE import Wave_tracing_FE
+from wave_tracing import Wave_tracing
 
 
 nx = 20
@@ -41,7 +42,7 @@ def my_wave():
     Y0, YN = Y[0],Y[-1]
     incoming_wave_side = 'left'
 
-    wt = Wave_tracing_FE(U, V,  nx, ny, nt, T, dx, dy, wave_period, theta0,
+    wt = Wave_tracing(U, V,  nx, ny, nt, T, dx, dy, wave_period, theta0,
                  nb_wave_rays, X0, XN, Y0, YN,
                  incoming_wave_side,temporal_evolution=False, T0=None)
     return wt
@@ -102,14 +103,10 @@ def test_find_indices_wave_ray_parallell(my_wave, my_directions):
     assert ((idys_p1-idys) == np.array([0,0,1,1,0,0,-1,-1])).all()
 
 
-"""
-    NOTE: There is an issue with pyrpoj not having the Transformer method in pytest, even though it is available in the conda env..
 def test_lat_lon(my_wave):
     my_wave.set_initial_condition()
     proj4='+proj=stere +ellps=WGS84 +lat_0=90.0 +lat_ts=60.0 +x_0=3192800 +y_0=1784000 +lon_0=70'
-
+    true_lat, true_lon = pyproj.Transformer.from_proj(proj4,'epsg:4326', always_xy=True).transform(0, 0)
     lats, lons = my_wave.to_latlon(proj4)
-    print(lats,lons)
-
-    #assert my_wave.find_nearest(test_array,test_value) == 3
-"""
+    assert lats[0,0] == true_lat
+    assert lons[0,0] == true_lon

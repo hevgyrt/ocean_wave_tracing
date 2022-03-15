@@ -173,7 +173,6 @@ class Wave_tracing():
 
         if d is None:
             c_in = np.sqrt(g/k)
-            print('Here {}'.format(c_in))
             n=0.5
         else:
             #logger.info(d)
