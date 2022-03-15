@@ -326,7 +326,7 @@ class Wave_tracing():
     def solve(self, solver):
         """ Solve the geometrical optics equations numerically
         """
-        print('solver?')
+
         if not callable(solver):
             raise TypeError('f is %s, not a solver' % type(solver))
 
@@ -467,10 +467,11 @@ class Wave_tracing():
             # Logging purposes
             counter += 1
             if self.debug:
-                #logging.info("dsigma_dm:{}".format(dsigma_dm[wr_id]))
+                logging.info("idxs:{}".format(idxs))
+                logging.info("idys:{}".format(idxs))
                 #logging.info("dsigma_ds:{}".format(dsigma_ds[wr_id]))
                 #logging.info("phi: {}".format(np.cos(phi[wr_id])))
-                if counter in range(1690,1700,50):
+                if counter in range(1200,1300,250):
                     #wr_id = [20, 40, 105, 80, 130, 150, 170] # wave ray ID for illustration in idealized_input
                     wr_id = [20, 40, 80,105] # wave ray ID
 
@@ -596,8 +597,8 @@ if __name__ == '__main__':
     import xarray as xa
 
 
-    test = 'lofoten' #lofoten, eddy, zero
-    bathymetry = False
+    test = 'zero' #lofoten, eddy, zero
+    bathymetry = True
 
     if test=='lofoten':
         u_eastwards = xa.open_dataset('u_eastwards.nc')
@@ -633,7 +634,7 @@ if __name__ == '__main__':
         nb_wave_rays = 200#550#nx
         T = 3000
         print("T={}h".format(T/3600))
-        nt = 1900
+        nt = 1200
         wave_period = 8
         #X0, XN = Y[0], Y[-1] #NOTE THIS
         #Y0, YN = X[0], X[-1] #NOTE THIS
@@ -641,8 +642,8 @@ if __name__ == '__main__':
         Y0, YN = X[0], X[-1] #NOTE THIS
 
         if bathymetry:
-            d = ncin.bathymetry_bm.data
-            #d = ncin.bathymetry_1dy_slope.data
+            #d = ncin.bathymetry_bm.data
+            d = ncin.bathymetry_1dy_slope.data
 
 
     elif test=='zero':
@@ -659,15 +660,15 @@ if __name__ == '__main__':
         T = 2700
         print("T={}h".format(T/3600))
         nt = 1700
-        wave_period = 10
+        wave_period = 20
         X0, XN = Y[0], Y[-1] #NOTE THIS
         Y0, YN = X[0], X[-1] #NOTE THIS
 
         if bathymetry:
-            #d = ncin.bathymetry_bm.data
-            d = ncin.bathymetry_1dy_slope.data
+            d = ncin.bathymetry_bm.data
+            #d = ncin.bathymetry_1dy_slope.data
 
-    i_w_side = 'left'#'top'
+    i_w_side = 'bottom'#'top'
     if i_w_side == 'left':
         theta0 = 0.12 #Initial wave propagation direction
     elif i_w_side == 'top':
