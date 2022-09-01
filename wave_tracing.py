@@ -328,7 +328,6 @@ class Wave_tracing():
         U = self.U.data
         V = self.V.data
 
-
         #Compute velocity gradients
         logger.warning('Assuming uniform horizontal resolution')
         if self.nb_velocity_time_steps>1:
