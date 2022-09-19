@@ -1,0 +1,10 @@
+*.pyc
+*.swp
+*.pdf
+*.log
+*.png
+*.bak
+*.env
+current_forcing/
+__pycache__/
+figures/
