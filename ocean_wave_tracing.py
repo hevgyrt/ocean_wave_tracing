@@ -10,7 +10,7 @@ import warnings
 #suppress warnings
 warnings.filterwarnings('ignore')
 
-from . import util_solvers as uts
+import util_solvers as uts
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename='ocean_wave_tracing.log', level=logging.INFO)
@@ -23,8 +23,8 @@ class Wave_tracing():
     """
     def __init__(self, U, V,  nx, ny, nt, T, dx, dy, wave_period, theta0,
                  nb_wave_rays, domain_X0, domain_XN, domain_Y0, domain_YN,
-                 incoming_wave_side,temporal_evolution=False, T0=None,
-                 d=None,DEBUG=False):
+                 temporal_evolution=False, T0=None,
+                 d=None,DEBUG=False,**kwargs):
         """
         Args:
             U (float): eastward velocity 2D field
@@ -43,12 +43,14 @@ class Wave_tracing():
                                 equal or less to either nx or ny.
             domain_*0 (float): start value of domain area in X and Y direction
             domain_*N (float): end value of domain area in X and Y direction
-            incoming_wave_side (str): side for incoming wave direction
-                                        [left, right, top, bottom]
+
 
             temporal_evolution (bool): flag if velocity field should change in time
             T0 (int): Initial time if temporal_evolution==True
             d (float): 2D bathymetry field
+            **kwargs
+            incoming_wave_side (str): side for incoming wave direction
+                                        [left, right, top, bottom]
         """
         self.g = 9.81
         self.nx = nx
@@ -65,7 +67,7 @@ class Wave_tracing():
         self.domain_XN = domain_XN # right side
         self.domain_Y0 = domain_Y0 # bottom
         self.domain_YN = domain_YN # top
-        self.i_w_side = incoming_wave_side
+        #self.i_w_side = incoming_wave_side
         self.T = T
 
         self.temporal_evolution = temporal_evolution
@@ -123,6 +125,8 @@ class Wave_tracing():
             self.velocity_idt = np.array([self.find_nearest(t_velocity_field,t_wr[i]) for i in range(len(t_wr))])
             logging.info('Vel idt : {}'.format(self.velocity_idt))
             logging.info('length: {}, {}'.format(len(self.velocity_idt),nt))
+
+        self.kwargs = kwargs
 
     def check_bathymetry(self,d):
         """ Method checking and fixing bathymetry input
@@ -267,43 +271,91 @@ class Wave_tracing():
 
     def set_initial_condition(self):
         """ Setting inital conditions
+            supports side
+            support single values
+            if single values, make arrays of all
+            incoming side trumps initial positions
         """
+        nb_wave_rays = self.nb_wave_rays
 
-        if self.i_w_side == 'left':
-            xs = self.domain_X0
-            ys = np.linspace(self.domain_Y0, self.domain_YN, self.nb_wave_rays)
-            self.xr[:,0]=xs
-            self.yr[:,0]=ys
+        valid_sides = ['left', 'right','top','bottom']
 
-        elif self.i_w_side == 'right':
-            xs = self.domain_XN
-            ys = np.linspace(self.domain_Y0, self.domain_YN, self.nb_wave_rays)
-            self.xr[:,0]=xs
-            self.yr[:,0]=ys
+        if 'incoming_wave_side' in self.kwargs:
+            i_w_side = self.kwargs['incoming_wave_side']
 
-        elif self.i_w_side == 'top':
-            xs = np.linspace(self.domain_X0, self.domain_XN, self.nb_wave_rays)
-            ys = self.domain_YN
-            self.xr[:,0]=xs
-            self.yr[:,0]=ys
-
-        elif self.i_w_side == 'bottom':
-            xs = np.linspace(self.domain_X0, self.domain_XN, self.nb_wave_rays)
-            ys = self.domain_Y0
-            self.xr[:,0]=xs
-            self.yr[:,0]=ys
+            # If invalid, check first for ipx and ipy
+            if not i_w_side in valid_sides:
+                if 'ipx' or 'ipy' in self.kwargs:
+                    i_w_side = 'NONE'
+                else:
+                    logger.info('No initial position or side given. Left will be used.')
+                    i_w_side = 'left'
         else:
-            logger.error('Invalid initial wave direcion. Terminating.')
+            i_w_side='NONE'
+
+
+        if i_w_side == 'left':
+            xs = np.ones(nb_wave_rays)*self.domain_X0
+            ys = np.linspace(self.domain_Y0, self.domain_YN, nb_wave_rays)
+
+        elif i_w_side == 'right':
+            xs = np.ones(nb_wave_rays)*self.domain_XN
+            ys = np.linspace(self.domain_Y0, self.domain_YN, nb_wave_rays)
+
+        elif i_w_side == 'top':
+            xs = np.linspace(self.domain_X0, self.domain_XN, nb_wave_rays)
+            ys = np.ones(nb_wave_rays)*self.domain_YN
+
+        elif i_w_side == 'bottom':
+            xs = np.linspace(self.domain_X0, self.domain_XN, nb_wave_rays)
+            ys = np.ones(nb_wave_rays)*self.domain_Y0
+        elif i_w_side == 'NONE':
+            logger.info('No initial side given. Try with discrete points')
+
+            ipx = self.kwargs['ipx']
+            ipy = self.kwargs['ipy']
+
+            # First check initial position x
+            if type(ipx) is float:
+                ipx = np.ones(nb_wave_rays)*ipx
+                xs=ipx.copy()
+            elif isinstance(ipx,np.ndarray):
+                assert nb_wave_rays == len(self.kwargs['ipx']), "Need same dimension on initial x-values"
+                xs=ipx.copy()
+            else:
+                logger.error('ipx must be either float or numpy array. Terminating.')
+                sys.exit()
+
+            if type(ipy) is float:
+                ipy = np.ones(nb_wave_rays)*ipy
+                ys=ipy.copy()
+            elif isinstance(ipy,np.ndarray):
+                assert nb_wave_rays == len(self.kwargs['ipy']), "Need same dimension on initial y-values"
+                ys=ipy.copy()
+            else:
+                logger.error('ipy must be either float or numpy array. Terminating.')
+                sys.exit()
+
+
+        self.xr[:,0] = xs
+        self.yr[:,0] = ys
+
+
+        #Theta0
+        if type(self.theta0) is float:
+            self.theta0 = np.ones(nb_wave_rays)*self.theta0
+        elif isinstance(self.theta0,np.ndarray):
+            assert nb_wave_rays == len(self.theta0), "Initial values must have same dimension as number of wave rays"
+        else:
+            logger.error('Theta0 must be either float or numpy array. Terminating.')
             sys.exit()
 
-        # set inital wave
-        k0, kx0, ky0 = self.wave(T=self.wave_period,
-                        theta=self.theta0,d=self.d.sel(y=ys,x=xs,method='nearest'))
 
-        self.kx[:,0]=kx0
-        self.ky[:,0]=ky0
-        self.k[:,0]=k0
-        logger.info('theta: {}, {}'.format(self.theta0,np.arctan(ky0/kx0)))
+        # set inital wave
+        for i in range(nb_wave_rays):
+            self.k[i,0], self.kx[i,0], self.ky[i,0] = self.wave(T=self.wave_period,
+                                                                theta=self.theta0[i],
+                                                                d=self.d.sel(y=ys[i],x=xs[i],method='nearest'))
         self.theta[:,0] = self.theta0
 
 
@@ -529,8 +581,8 @@ class Wave_tracing():
         return lons, lats
 
 if __name__ == '__main__':
-    test = 'lofoten' #lofoten, eddy, zero
-    bathymetry = True
+    test = 'eddy' #lofoten, eddy, zero
+    bathymetry = False
 
     if test=='lofoten':
         u_eastwards = xa.open_dataset('current_forcing/u_eastwards.nc')
@@ -567,7 +619,7 @@ if __name__ == '__main__':
         T = 3000
         print("T={}h".format(T/3600))
         nt = 800
-        wave_period = 8
+        wave_period = 5
         #X0, XN = Y[0], Y[-1] #NOTE THIS
         #Y0, YN = X[0], X[-1] #NOTE THIS
         X0, XN = Y[0], Y[-1] #NOTE THIS
@@ -591,7 +643,7 @@ if __name__ == '__main__':
         nb_wave_rays = 200#550#nx
         T = 1000
         print("T={}h".format(T/3600))
-        nt = 1201
+        nt = 500
         wave_period = 20
         X0, XN = Y[0], Y[-1] #NOTE THIS
         Y0, YN = X[0], X[-1] #NOTE THIS
@@ -603,6 +655,7 @@ if __name__ == '__main__':
     i_w_side = 'left'#'top'
     if i_w_side == 'left':
         theta0 = 0.12 #Initial wave propagation direction
+        theta0 = np.linspace(0,np.pi,nb_wave_rays) #Initial wave propagation direction
     elif i_w_side == 'top':
         theta0 = 1.5*np.pi#0#np.pi/8 #Initial wave propagation direction
     elif i_w_side == 'right':
@@ -612,10 +665,14 @@ if __name__ == '__main__':
 
 
     if bathymetry:
+
+        initial_position_x = float(5999)#np.arange(nb_wave_rays)
+        initial_position_y = float(2000)#np.arange(nb_wave_rays)
+        print(initial_position_y)
         wt = Wave_tracing(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
                             domain_X0=X0, domain_XN=XN,
                             domain_Y0=Y0, domain_YN=YN,
-                            incoming_wave_side=i_w_side,d=d,DEBUG=True)
+                            d=d,DEBUG=False, ipx=initial_position_x,ipy=initial_position_y)
     else:
         wt = Wave_tracing(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
                             domain_X0=X0, domain_XN=XN,
@@ -675,7 +732,7 @@ if __name__ == '__main__':
     plot_single_ray = True
     if plot_single_ray:
         ray_id = 105
-        idts = np.arange(200,800,200)
+        idts = np.arange(100,450,120)
         fig3,ax3 = plt.subplots(nrows=4,ncols=1,figsize=(16,10),gridspec_kw={'height_ratios': [3, 1,1,1]})
 
         pc=ax3[0].contourf(wt.x,wt.y,-wt.d,shading='auto',cmap=cm.deep,levels=25)
