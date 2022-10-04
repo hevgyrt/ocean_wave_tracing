@@ -6,11 +6,14 @@ import pyproj
 import sys
 import cmocean.cm as cm
 
-##
-import util_solvers as uts
+import warnings
+#suppress warnings
+warnings.filterwarnings('ignore')
+
+from . import util_solvers as uts
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename='wave_tracing.log', level=logging.INFO)
+logging.basicConfig(filename='ocean_wave_tracing.log', level=logging.INFO)
 logging.info('\nStarted')
 
 
@@ -56,6 +59,7 @@ class Wave_tracing():
         self.wave_period = wave_period
         self.theta0 = theta0
         self.nb_wave_rays = nb_wave_rays
+        assert nb_wave_rays > 0, "Number of wave rays must be larger than zero"
 
         self.domain_X0 = domain_X0 # left side
         self.domain_XN = domain_XN # right side
@@ -186,7 +190,6 @@ class Wave_tracing():
             c_in = np.sqrt(g/k)
             n=0.5
         else:
-            #logger.info(d)
             c_in = np.sqrt((g/k)*np.tanh(k*d)) #intrinsic
             n = 0.5 * (1 + (2*k*d)/np.sinh(2*k*d))
 
@@ -233,8 +236,6 @@ class Wave_tracing():
         dsigma = (1/(2*dx)) * (self.sigma(k,ray_depth_next) - self.sigma(k,ray_depth_last))
 
         return dsigma
-
-
 
 
     def wave(self,T,theta,d):
@@ -306,13 +307,13 @@ class Wave_tracing():
         self.theta[:,0] = self.theta0
 
 
-    def solve(self, solver):
-        """ Solve the geometrical optics equations numerically
+    def solve(self, solver=uts.RungeKutta4):
+        """ Solve the geometrical optics equations numerically by means of the
+            method of characteristics
         """
 
         if not callable(solver):
             raise TypeError('f is %s, not a solver' % type(solver))
-
 
         k = self.k
         kx= self.kx
@@ -329,7 +330,7 @@ class Wave_tracing():
         V = self.V.data
 
         #Compute velocity gradients
-        logger.warning('Assuming uniform horizontal resolution')
+        logger.info('Assuming uniform horizontal resolution')
         if self.nb_velocity_time_steps>1:
             dudy, dudx = np.gradient(U,dx)[1:3]
             dvdy, dvdx = np.gradient(V,dy)[1:3]
@@ -351,8 +352,6 @@ class Wave_tracing():
 
         counter=0
         t = np.linspace(0,self.T,nt)
-        #f_adv = uts.Advection()
-        #f_wave_nb = uts.WaveNumberEvolution()
 
         for n in range(0,nt-1):
 
@@ -372,14 +371,11 @@ class Wave_tracing():
             cg_i[:,n+1] = self.c_intrinsic(k[:,n],d=ray_depth,group_velocity=True)
 
             # ADVECTION
-            #xr[:,n+1] = xr[:,n] + dt*(cg_i[:,n+1]*(kx[:,n]/k[:,n]) + U[velocity_idt[n],idys,idxs])
-            #yr[:,n+1] = yr[:,n] + dt*(cg_i[:,n+1]*(ky[:,n]/k[:,n]) + V[velocity_idt[n],idys,idxs])
             f_adv = uts.Advection(cg=cg_i[:,n+1], k=k[:,n], kx=kx[:,n], U=U[velocity_idt[n],idys,idxs])
             xr[:,n+1] = solver.advance(u=xr[:,n], f=f_adv,k=n,t=t)
 
             f_adv = uts.Advection(cg=cg_i[:,n+1], k=k[:,n], kx=ky[:,n], U=V[velocity_idt[n],idys,idxs])
             yr[:,n+1] = solver.advance(u=yr[:,n], f=f_adv, k=n, t=t)
-            #def advance(self,u, f, k, t):
 
 
             # EVOLUTION IN WAVE NUMBER
@@ -483,6 +479,10 @@ class Wave_tracing():
             xx (2d): x grid
             yy (2d): y grid
             hm (2d): heat map of wave ray density
+
+        #>>> wt = Wave_tracing(U=1,V=1,nx=1,ny=1,nt=1,T=1,dx=1,dy=1,wave_period=1, theta0=1,nb_wave_rays=1,domain_X0=0,domain_XN=0,domain_Y0=0,domain_YN=1,incoming_wave_side='left')
+        #>>> wt.solve()
+        #>>> wt.ray_density(x_increment=20,y_increment=20)
         """
         xx,yy=np.meshgrid(self.x[::x_increment],self.y[::y_increment])
         hm = np.zeros(xx.shape) # heatmap
@@ -529,12 +529,12 @@ class Wave_tracing():
         return lons, lats
 
 if __name__ == '__main__':
-    test = 'zero' #lofoten, eddy, zero
+    test = 'lofoten' #lofoten, eddy, zero
     bathymetry = True
 
     if test=='lofoten':
-        u_eastwards = xa.open_dataset('u_eastwards.nc')
-        v_northwards = xa.open_dataset('v_northward.nc')
+        u_eastwards = xa.open_dataset('current_forcing/u_eastwards.nc')
+        v_northwards = xa.open_dataset('current_forcing/v_northward.nc')
         U = u_eastwards.isel(time=1).to_array()[0].data
         V = v_northwards.isel(time=1).to_array()[0].data
         X = u_eastwards.X
@@ -548,14 +548,14 @@ if __name__ == '__main__':
         nt = 3000 # Nb time steps
         wave_period = 10
 
-
-
         X0, XN = X[0].data,X[-1].data
         Y0, YN = Y[0].data,Y[-1].data
 
+        d=None
+
     elif test=='eddy':
         idt0=15 #22
-        ncin = xa.open_dataset('idealized_input.nc')
+        ncin = xa.open_dataset('examples/idealized_input.nc')
         U = ncin.U[idt0::,:,:]
         V = ncin.V[idt0::,:,:]
         X = ncin.x.data
@@ -580,7 +580,7 @@ if __name__ == '__main__':
 
     elif test=='zero':
         idt0=15 #22
-        ncin = xa.open_dataset('idealized_input.nc')
+        ncin = xa.open_dataset('examples/idealized_input.nc')
         U = ncin.U_zero[idt0::,:,:]
         V = ncin.V_zero[idt0::,:,:]
         X = ncin.x.data
