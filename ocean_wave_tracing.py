@@ -5,6 +5,8 @@ import xarray as xa
 import pyproj
 import sys
 import cmocean.cm as cm
+import pandas as pd
+from netCDF4 import Dataset
 
 import warnings
 #suppress warnings
@@ -518,6 +520,50 @@ class Wave_tracing():
         self.theta = theta
         self.cg_i = cg_i
         logging.info('Stoppet at time idt: {}'.format(velocity_idt[n]))
+
+
+    def to_NetCDF(self,fname,**kwargs):
+
+        # relative time
+        t = np.linspace(0,self.T,self.nt)
+
+
+        if 'proj4' in kwargs:
+            lons,lats = self.to_latlon(kwargs['proj4'])
+        else:
+            lons = np.zeros(self.nt)
+            lats = lons.copy()
+
+        with (Dataset(fname, 'w', format='NETCDF4')) as ncout:
+            dim_time = ncout.createDimension('time',self.nt)
+            dim_wave_ray = ncout.createDimension('ray_id',self.nb_wave_rays)
+
+            nctime = ncout.createVariable('time','i4',('time',))
+
+            # Set time value
+            ##########################################################
+            nctime.long_name = 'reference time for ray trajectory'
+            nctime.units = 'seconds since start'
+            nctime[:] = t
+
+            varout = ncout.createVariable('k'    ,np.float32,('ray_id','time'))
+            varout[:] = self.k
+            varout = ncout.createVariable('kx'   ,np.float32,('ray_id','time'))
+            varout[:] = self.kx
+            varout = ncout.createVariable('ky'   ,np.float32,('ray_id','time'))
+            varout[:] = self.ky
+            varout = ncout.createVariable('xr'   ,np.float32,('ray_id','time'))
+            varout[:] = self.xr
+            varout = ncout.createVariable('yr'   ,np.float32,('ray_id','time'))
+            varout[:] = self.yr
+            varout = ncout.createVariable('theta',np.float32,('ray_id','time'))
+            varout[:] = self.theta
+            varout = ncout.createVariable('cg_i',np.float32,('ray_id','time'))
+            varout[:] = self.cg_i
+            varout = ncout.createVariable('lons',np.float32,('ray_id','time'))
+            varout[:] = lons
+            varout = ncout.createVariable('lats',np.float32,('ray_id','time'))
+            varout[:] = lats
 
     def ray_density(self,x_increment, y_increment, plot=False):
         """ Method computing ray density within boxes. The density of wave rays
