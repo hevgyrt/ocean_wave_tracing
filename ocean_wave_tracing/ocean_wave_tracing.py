@@ -12,7 +12,7 @@ import warnings
 #suppress warnings
 warnings.filterwarnings('ignore')
 
-import util_solvers as uts
+from . import util_solvers as uts
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename='ocean_wave_tracing.log', level=logging.INFO)
@@ -270,7 +270,7 @@ class Wave_tracing():
 
             args:
             wave_period (float): Wave period.
-            theta0 (rad): Wave initial direction. In radians.
+            theta0 (rad, float): Wave initial direction. In radians.
                          (0,.5*pi,pi,1.5*pi) correspond to going
                          (right, up, left, down).
 
@@ -283,62 +283,73 @@ class Wave_tracing():
 
         nb_wave_rays = self.nb_wave_rays
 
+        """
+        hvis iws:
+            velg iws
+            hvis iws invalid
+               set left
+        hvis ikke iws:
+            sjekk ipx, ipy,
+            whis ikke
+                velg iws=left
+        """
+
         valid_sides = ['left', 'right','top','bottom']
 
         if 'incoming_wave_side' in kwargs:
             i_w_side = kwargs['incoming_wave_side']
 
-            # If invalid, check first for ipx and ipy
             if not i_w_side in valid_sides:
-                if 'ipx' or 'ipy' in kwargs:
-                    i_w_side = 'NONE'
-                else:
-                    logger.info('No initial position or side given. Left will be used.')
-                    i_w_side = 'left'
+                logger.info('No initial position or side given. Left will be used.')
+                i_w_side = 'left'
+
+            if i_w_side == 'left':
+                xs = np.ones(nb_wave_rays)*self.domain_X0
+                ys = np.linspace(self.domain_Y0, self.domain_YN, nb_wave_rays)
+
+            elif i_w_side == 'right':
+                xs = np.ones(nb_wave_rays)*self.domain_XN
+                ys = np.linspace(self.domain_Y0, self.domain_YN, nb_wave_rays)
+
+            elif i_w_side == 'top':
+                xs = np.linspace(self.domain_X0, self.domain_XN, nb_wave_rays)
+                ys = np.ones(nb_wave_rays)*self.domain_YN
+
+            elif i_w_side == 'bottom':
+                xs = np.linspace(self.domain_X0, self.domain_XN, nb_wave_rays)
+                ys = np.ones(nb_wave_rays)*self.domain_Y0
+                #if 'ipx' or 'ipy' in kwargs:
+
         else:
-            i_w_side='NONE'
-
-        if i_w_side == 'left':
-            xs = np.ones(nb_wave_rays)*self.domain_X0
-            ys = np.linspace(self.domain_Y0, self.domain_YN, nb_wave_rays)
-
-        elif i_w_side == 'right':
-            xs = np.ones(nb_wave_rays)*self.domain_XN
-            ys = np.linspace(self.domain_Y0, self.domain_YN, nb_wave_rays)
-
-        elif i_w_side == 'top':
-            xs = np.linspace(self.domain_X0, self.domain_XN, nb_wave_rays)
-            ys = np.ones(nb_wave_rays)*self.domain_YN
-
-        elif i_w_side == 'bottom':
-            xs = np.linspace(self.domain_X0, self.domain_XN, nb_wave_rays)
-            ys = np.ones(nb_wave_rays)*self.domain_Y0
-        elif i_w_side == 'NONE':
             logger.info('No initial side given. Try with discrete points')
+            try:
+                ipx = kwargs['ipx']
+                ipy = kwargs['ipy']
 
-            ipx = kwargs['ipx']
-            ipy = kwargs['ipy']
+                # First check initial position x
+                if type(ipx) is float:
+                    ipx = np.ones(nb_wave_rays)*ipx
+                    xs=ipx.copy()
+                elif isinstance(ipx,np.ndarray):
+                    assert nb_wave_rays == len(kwargs['ipx']), "Need same dimension on initial x-values"
+                    xs=ipx.copy()
+                else:
+                    logger.error('ipx must be either float or numpy array. Terminating.')
+                    sys.exit()
 
-            # First check initial position x
-            if type(ipx) is float:
-                ipx = np.ones(nb_wave_rays)*ipx
-                xs=ipx.copy()
-            elif isinstance(ipx,np.ndarray):
-                assert nb_wave_rays == len(kwargs['ipx']), "Need same dimension on initial x-values"
-                xs=ipx.copy()
-            else:
-                logger.error('ipx must be either float or numpy array. Terminating.')
-                sys.exit()
-
-            if type(ipy) is float:
-                ipy = np.ones(nb_wave_rays)*ipy
-                ys=ipy.copy()
-            elif isinstance(ipy,np.ndarray):
-                assert nb_wave_rays == len(kwargs['ipy']), "Need same dimension on initial y-values"
-                ys=ipy.copy()
-            else:
-                logger.error('ipy must be either float or numpy array. Terminating.')
-                sys.exit()
+                if type(ipy) is float:
+                    ipy = np.ones(nb_wave_rays)*ipy
+                    ys=ipy.copy()
+                elif isinstance(ipy,np.ndarray):
+                    assert nb_wave_rays == len(kwargs['ipy']), "Need same dimension on initial y-values"
+                    ys=ipy.copy()
+                else:
+                    logger.error('ipy must be either float or numpy array. Terminating.')
+                    sys.exit()
+            except:
+                logger.info('No initial position ponts given. Left will be used')
+                xs = np.ones(nb_wave_rays)*self.domain_X0
+                ys = np.linspace(self.domain_Y0, self.domain_YN, nb_wave_rays)
 
 
         self.xr[:,0] = xs
@@ -346,7 +357,7 @@ class Wave_tracing():
 
 
         #Theta0
-        if type(theta0) is float:
+        if type(theta0) is float or type(theta0) is int:
             theta0 = np.ones(nb_wave_rays)*theta0
         elif isinstance(theta0,np.ndarray):
             assert nb_wave_rays == len(theta0), "Initial values must have same dimension as number of wave rays"
