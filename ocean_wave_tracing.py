@@ -23,7 +23,7 @@ class Wave_tracing():
     """ Class computing the path of ocean wave rays according to the geometrical
     optics approximation.
     """
-    def __init__(self, U, V,  nx, ny, nt, T, dx, dy, wave_period, theta0,
+    def __init__(self, U, V,  nx, ny, nt, T, dx, dy,
                  nb_wave_rays, domain_X0, domain_XN, domain_Y0, domain_YN,
                  temporal_evolution=False, T0=None,
                  d=None,DEBUG=False,**kwargs):
@@ -37,10 +37,6 @@ class Wave_tracing():
             T (int): Seconds. Duration of wave tracing
             dx (int): Spatial resolution in x-direction. Units conforming to U
             dy (int): Spatial resolution in y-direction. Units conforming to V
-            wave_period (float): Wave period.
-            theta0 (rad): Wave initial direction. In radians.
-                         (0,.5*pi,pi,1.5*pi) correspond to going
-                         (right, up, left, down).
             nb_wave_rays (int): Number of wave rays to track. NOTE: Should be
                                 equal or less to either nx or ny.
             domain_*0 (float): start value of domain area in X and Y direction
@@ -51,8 +47,6 @@ class Wave_tracing():
             T0 (int): Initial time if temporal_evolution==True
             d (float): 2D bathymetry field
             **kwargs
-            incoming_wave_side (str): side for incoming wave direction
-                                        [left, right, top, bottom]
         """
         self.g = 9.81
         self.nx = nx
@@ -60,8 +54,6 @@ class Wave_tracing():
         self.nt = nt
         self.dx = dx
         self.dy = dy
-        self.wave_period = wave_period
-        self.theta0 = theta0
         self.nb_wave_rays = nb_wave_rays
         assert nb_wave_rays > 0, "Number of wave rays must be larger than zero"
 
@@ -271,30 +263,40 @@ class Wave_tracing():
         return k,kx,ky
 
 
-    def set_initial_condition(self):
-        """ Setting inital conditions
-            supports side
-            support single values
-            if single values, make arrays of all
-            incoming side trumps initial positions
+    def set_initial_condition(self, wave_period, theta0,**kwargs):
+        """ Setting inital conditions for the domain. Support domain side and
+            initial x- and y-positions. However, side trumps initial position
+            if both are given.
+
+            args:
+            wave_period (float): Wave period.
+            theta0 (rad): Wave initial direction. In radians.
+                         (0,.5*pi,pi,1.5*pi) correspond to going
+                         (right, up, left, down).
+
+            **kwargs
+                incoming_wave_side (str): side for incoming wave direction
+                                            [left, right, top, bottom]
+                ipx (float, array of floats): initial position x
+                ipy (float, array of floats): initial position y
         """
+
         nb_wave_rays = self.nb_wave_rays
 
         valid_sides = ['left', 'right','top','bottom']
 
-        if 'incoming_wave_side' in self.kwargs:
-            i_w_side = self.kwargs['incoming_wave_side']
+        if 'incoming_wave_side' in kwargs:
+            i_w_side = kwargs['incoming_wave_side']
 
             # If invalid, check first for ipx and ipy
             if not i_w_side in valid_sides:
-                if 'ipx' or 'ipy' in self.kwargs:
+                if 'ipx' or 'ipy' in kwargs:
                     i_w_side = 'NONE'
                 else:
                     logger.info('No initial position or side given. Left will be used.')
                     i_w_side = 'left'
         else:
             i_w_side='NONE'
-
 
         if i_w_side == 'left':
             xs = np.ones(nb_wave_rays)*self.domain_X0
@@ -314,15 +316,15 @@ class Wave_tracing():
         elif i_w_side == 'NONE':
             logger.info('No initial side given. Try with discrete points')
 
-            ipx = self.kwargs['ipx']
-            ipy = self.kwargs['ipy']
+            ipx = kwargs['ipx']
+            ipy = kwargs['ipy']
 
             # First check initial position x
             if type(ipx) is float:
                 ipx = np.ones(nb_wave_rays)*ipx
                 xs=ipx.copy()
             elif isinstance(ipx,np.ndarray):
-                assert nb_wave_rays == len(self.kwargs['ipx']), "Need same dimension on initial x-values"
+                assert nb_wave_rays == len(kwargs['ipx']), "Need same dimension on initial x-values"
                 xs=ipx.copy()
             else:
                 logger.error('ipx must be either float or numpy array. Terminating.')
@@ -332,7 +334,7 @@ class Wave_tracing():
                 ipy = np.ones(nb_wave_rays)*ipy
                 ys=ipy.copy()
             elif isinstance(ipy,np.ndarray):
-                assert nb_wave_rays == len(self.kwargs['ipy']), "Need same dimension on initial y-values"
+                assert nb_wave_rays == len(kwargs['ipy']), "Need same dimension on initial y-values"
                 ys=ipy.copy()
             else:
                 logger.error('ipy must be either float or numpy array. Terminating.')
@@ -344,10 +346,10 @@ class Wave_tracing():
 
 
         #Theta0
-        if type(self.theta0) is float:
-            self.theta0 = np.ones(nb_wave_rays)*self.theta0
-        elif isinstance(self.theta0,np.ndarray):
-            assert nb_wave_rays == len(self.theta0), "Initial values must have same dimension as number of wave rays"
+        if type(theta0) is float:
+            theta0 = np.ones(nb_wave_rays)*theta0
+        elif isinstance(theta0,np.ndarray):
+            assert nb_wave_rays == len(theta0), "Initial values must have same dimension as number of wave rays"
         else:
             logger.error('Theta0 must be either float or numpy array. Terminating.')
             sys.exit()
@@ -355,10 +357,10 @@ class Wave_tracing():
 
         # set inital wave
         for i in range(nb_wave_rays):
-            self.k[i,0], self.kx[i,0], self.ky[i,0] = self.wave(T=self.wave_period,
-                                                                theta=self.theta0[i],
+            self.k[i,0], self.kx[i,0], self.ky[i,0] = self.wave(T=wave_period,
+                                                                theta=theta0[i],
                                                                 d=self.d.sel(y=ys[i],x=xs[i],method='nearest'))
-        self.theta[:,0] = self.theta0
+        self.theta[:,0] = theta0
 
 
     def solve(self, solver=uts.RungeKutta4):
@@ -453,8 +455,9 @@ class Wave_tracing():
             theta[:,n+1] = theta[:,n+1]%(2*np.pi)
 
 
-            # Logging purposes
             counter += 1
+
+            # Logging purposes
             if self.debug:
                 #logging.info("idxs:{}".format(idxs))
                 #logging.info("idys:{}".format(idxs))
@@ -472,13 +475,9 @@ class Wave_tracing():
                     pc=ax3[0].contourf(self.x,self.y,-self.d,shading='auto',cmap=cm.deep_r,levels=25)
                     for id in wr_id:
                         ax3[0].plot(self.xr[id,:n+1],self.yr[id,:n+1],'-k')
-                    #ax3[0].plot(self.x[idxs[wr_id]],self.y[idys[wr_id]],'mo')
-                    #ax3[0].plot(self.x[idxs_dm_p1[wr_id]],self.y[idys_dm_p1[wr_id]],'rs',alpha=0.6, label='m coord')
-                    #ax3[0].plot(self.x[idxs_ds_p1[wr_id]],self.y[idys_ds_p1[wr_id]],'ks',alpha=0.6, label='s coord')
 
                     ax3[0].plot(wt.xr[wr_id[2],idts],wt.yr[wr_id[2],idts],marker='s',ms=7,color='tab:red',linestyle='none')
 
-                    #ax3[0].legend()
                     ax3[0].xaxis.tick_top()
 
                     ax3[1].plot(-wt.ray_depth[wr_id[2],:1090], label=r'$d(x_r,y_r)$')
@@ -596,7 +595,6 @@ class Wave_tracing():
                     counter+=1
                     valid_x = (self.xr[i,:]>x0)*(self.xr[i,:]<xn)
                     if (np.any((self.yr[i,:][valid_x]>y0)*(self.yr[i,:][valid_x]<yn))):
-                        #print(idx,idy,'OK')
                         hm[idy,idx]+=1
 
         if plot:
@@ -627,8 +625,8 @@ class Wave_tracing():
         return lons, lats
 
 if __name__ == '__main__':
-    test = 'eddy' #lofoten, eddy, zero
-    bathymetry = False
+    test = 'zero' #lofoten, eddy, zero
+    bathymetry = True
 
     if test=='lofoten':
         u_eastwards = xa.open_dataset('current_forcing/u_eastwards.nc')
@@ -649,6 +647,9 @@ if __name__ == '__main__':
         X0, XN = X[0].data,X[-1].data
         Y0, YN = Y[0].data,Y[-1].data
 
+        initial_position_x = float(0.5*(XN-X0))#np.arange(nb_wave_rays)
+        initial_position_y = float(0.5*(YN-Y0))#np.arange(nb_wave_rays)
+
         d=None
 
     elif test=='eddy':
@@ -666,10 +667,10 @@ if __name__ == '__main__':
         print("T={}h".format(T/3600))
         nt = 800
         wave_period = 5
-        #X0, XN = Y[0], Y[-1] #NOTE THIS
-        #Y0, YN = X[0], X[-1] #NOTE THIS
-        X0, XN = Y[0], Y[-1] #NOTE THIS
-        Y0, YN = X[0], X[-1] #NOTE THIS
+        X0, XN = X[0], X[-1]
+        Y0, YN = Y[0], Y[-1]
+        initial_position_x = float(0.5*(XN-X0))#np.arange(nb_wave_rays)
+        initial_position_y = float(0.5*(YN-Y0))#np.arange(nb_wave_rays)
 
         if bathymetry:
             #d = ncin.bathymetry_bm.data
@@ -691,8 +692,11 @@ if __name__ == '__main__':
         print("T={}h".format(T/3600))
         nt = 500
         wave_period = 20
-        X0, XN = Y[0], Y[-1] #NOTE THIS
-        Y0, YN = X[0], X[-1] #NOTE THIS
+        X0, XN = X[0], X[-1]
+        Y0, YN = Y[0], Y[-1]
+
+        initial_position_x = float(0.5*(XN-X0))#np.arange(nb_wave_rays)
+        initial_position_y = float(0.5*(YN-Y0))#np.arange(nb_wave_rays)
 
         if bathymetry:
             d = ncin.bathymetry_bm.data
@@ -712,19 +716,20 @@ if __name__ == '__main__':
 
     if bathymetry:
 
-        initial_position_x = float(5999)#np.arange(nb_wave_rays)
-        initial_position_y = float(2000)#np.arange(nb_wave_rays)
-        print(initial_position_y)
-        wt = Wave_tracing(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
+        wt = Wave_tracing(U, V, nx, ny, nt,T,dx,dy, nb_wave_rays=nb_wave_rays,
                             domain_X0=X0, domain_XN=XN,
                             domain_Y0=Y0, domain_YN=YN,
-                            d=d,DEBUG=False, ipx=initial_position_x,ipy=initial_position_y)
+                            d=d,DEBUG=False,)
     else:
-        wt = Wave_tracing(U, V, nx, ny, nt,T,dx,dy, wave_period, theta0, nb_wave_rays=nb_wave_rays,
+        wt = Wave_tracing(U, V, nx, ny, nt,T,dx,dy, nb_wave_rays=nb_wave_rays,
                             domain_X0=X0, domain_XN=XN,
                             domain_Y0=Y0, domain_YN=YN,
-                            incoming_wave_side=i_w_side,DEBUG=True)
-    wt.set_initial_condition()
+                            DEBUG=True)
+
+
+    wt.set_initial_condition(wave_period=wave_period, theta0=theta0,
+                             incoming_wave_side=i_w_side,
+                             ipx=initial_position_x,ipy=initial_position_y)
     #wt.solve(solver=uts.ForwardEuler)
     wt.solve(solver=uts.RungeKutta4)
 
@@ -736,15 +741,12 @@ if __name__ == '__main__':
         vorticity = wt.dvdx-wt.dudy
         pc=ax.pcolormesh(wt.x,wt.y,vorticity[0,:,:],shading='auto',cmap='bwr',
                          vmin=-0.0003,vmax=0.0003)
-        #pc=ax.pcolormesh(X,Y,wt.U.isel(time=0),shading='auto')
     elif test=='eddy':
         vorticity = wt.dvdx-wt.dudy
         pc=ax.pcolormesh(wt.x,wt.y,vorticity[0,:,:],shading='auto',cmap='bwr',
                          vmin=-0.0004,vmax=0.0004)
-        #pc=ax.pcolormesh(Y,X,ncin.speed[idt0,:,:],shading='auto',vmin=0)
     elif test=='zero' and bathymetry:
         pc=ax.contourf(wt.x,wt.y,-d,shading='auto',cmap='viridis',levels=25)
-        #pc=ax.contourf(Y,X,np.gradient(-d)[1],shading='auto',cmap='viridis')
 
     ax.plot(wt.xr[:,0],wt.yr[:,0],'o')
     step=2
@@ -754,7 +756,6 @@ if __name__ == '__main__':
     idts = np.arange(0,nt,40)
     #ax.plot(wt.xr[:,idts],wt.yr[:,idts],'--k')
     cb = fig.colorbar(pc)
-                #fig.savefig('T3')
 
 
     if test == 'lofoten':
