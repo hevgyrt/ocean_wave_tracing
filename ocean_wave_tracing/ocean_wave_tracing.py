@@ -13,7 +13,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 import util_solvers as uts
-from util_methods import make_xarray_dataArray
+from util_methods import make_xarray_dataArray, to_xarray_ds
 
 
 logger = logging.getLogger(__name__)
@@ -533,7 +533,25 @@ class Wave_tracing():
         self.cg_i = cg_i
         logging.info('Stoppet at time idt: {}'.format(velocity_idt[n]))
 
-    def to_ds(self):
+    def to_ds(self,**kwargs):
+
+        if 'proj4' in kwargs:
+            lons,lats = self.to_latlon(kwargs['proj4'])
+        else:
+            lons = np.zeros((self.nb_wave_rays,self.nt))
+            lats = lons.copy()
+
+        variables = {'k':self.k,
+                    'kx':self.kx,
+                    'ky':self.ky,
+                    'xr':self.xr,
+                    'yr':self.yr,
+                    'theta':self.theta,
+                    'cg_i':self.cg_i,
+                    'lat': lats,
+                    'lon':lons
+                    }
+
         with open('ray_metadata.json') as f:
             data = json.load(f)
 
@@ -541,51 +559,9 @@ class Wave_tracing():
         t = np.linspace(0,self.T,self.nt)
         ray_id = np.arange(self.nb_wave_rays)
 
-        vars = make_xarray_dataArray(var=self.k, t=t,rays=ray_id,name='k',attribs=data['k'])
-        print(vars)
+        vars = [make_xarray_dataArray(var=variables[vname], t=t,rays=ray_id,name=vname,attribs=data[vname]) for vname in list(variables.keys())]
 
-    def to_NetCDF(self,fname,**kwargs):
-
-        # relative time
-        t = np.linspace(0,self.T,self.nt)
-
-
-        if 'proj4' in kwargs:
-            lons,lats = self.to_latlon(kwargs['proj4'])
-        else:
-            lons = np.zeros(self.nt)
-            lats = lons.copy()
-
-        with (Dataset(fname, 'w', format='NETCDF4')) as ncout:
-            dim_time = ncout.createDimension('time',self.nt)
-            dim_wave_ray = ncout.createDimension('ray_id',self.nb_wave_rays)
-
-            nctime = ncout.createVariable('time','i4',('time',))
-
-            # Set time value
-            ##########################################################
-            nctime.long_name = 'reference time for ray trajectory'
-            nctime.units = 'seconds since start'
-            nctime[:] = t
-
-            varout = ncout.createVariable('k'    ,np.float32,('ray_id','time'))
-            varout[:] = self.k
-            varout = ncout.createVariable('kx'   ,np.float32,('ray_id','time'))
-            varout[:] = self.kx
-            varout = ncout.createVariable('ky'   ,np.float32,('ray_id','time'))
-            varout[:] = self.ky
-            varout = ncout.createVariable('xr'   ,np.float32,('ray_id','time'))
-            varout[:] = self.xr
-            varout = ncout.createVariable('yr'   ,np.float32,('ray_id','time'))
-            varout[:] = self.yr
-            varout = ncout.createVariable('theta',np.float32,('ray_id','time'))
-            varout[:] = self.theta
-            varout = ncout.createVariable('cg_i',np.float32,('ray_id','time'))
-            varout[:] = self.cg_i
-            varout = ncout.createVariable('lons',np.float32,('ray_id','time'))
-            varout[:] = lons
-            varout = ncout.createVariable('lats',np.float32,('ray_id','time'))
-            varout[:] = lats
+        return to_xarray_ds(vars)
 
     def ray_density(self,x_increment, y_increment, plot=False):
         """ Method computing ray density within boxes. The density of wave rays
@@ -755,7 +731,6 @@ if __name__ == '__main__':
                              ipx=initial_position_x,ipy=initial_position_y)
     #wt.solve(solver=uts.ForwardEuler)
     wt.solve(solver=uts.RungeKutta4)
-
 
 
     ### PLOTTING ###
