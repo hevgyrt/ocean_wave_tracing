@@ -539,7 +539,7 @@ class Wave_tracing():
 
         # relative time
         t = np.linspace(0,self.T,self.nt)
-        ray_id = np.arange(nb_wave_rays)
+        ray_id = np.arange(self.nb_wave_rays)
 
         vars = make_xarray_dataArray(var=self.k, t=t,rays=ray_id,name='k',attribs=data['k'])
         print(vars)

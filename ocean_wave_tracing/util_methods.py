@@ -8,11 +8,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 def make_xarray_dataArray(var,t,rays,name,attribs):
-    
+
     vo = xa.DataArray(data=var,
-                      coords=[("time", t),
-                              ('ray_id',rays)],
-                      dims=['time','ray_id'],
+                      coords=[('ray_id',rays),
+                            ("time", t)],
+                      dims=['ray_id','time'],
                       attrs=attribs,
                       name=name)
     return vo
