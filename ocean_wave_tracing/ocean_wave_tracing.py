@@ -12,7 +12,7 @@ import warnings
 #suppress warnings
 warnings.filterwarnings('ignore')
 
-from . import util_solvers as uts
+import util_solvers as uts
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename='ocean_wave_tracing.log', level=logging.INFO)
@@ -636,12 +636,12 @@ class Wave_tracing():
         return lons, lats
 
 if __name__ == '__main__':
-    test = 'zero' #lofoten, eddy, zero
+    test = 'eddy' #lofoten, eddy, zero
     bathymetry = True
 
     if test=='lofoten':
-        u_eastwards = xa.open_dataset('current_forcing/u_eastwards.nc')
-        v_northwards = xa.open_dataset('current_forcing/v_northward.nc')
+        u_eastwards = xa.open_dataset('../current_forcing/u_eastwards.nc')
+        v_northwards = xa.open_dataset('../current_forcing/v_northward.nc')
         U = u_eastwards.isel(time=1).to_array()[0].data
         V = v_northwards.isel(time=1).to_array()[0].data
         X = u_eastwards.X
@@ -650,9 +650,9 @@ if __name__ == '__main__':
         ny = U.shape[0]
         nb_wave_rays = 120
         dx=dy=800
-        T = 31000 #Total duration
+        T = 3100 #Total duration
         print("T={}h".format(T/3600))
-        nt = 3000 # Nb time steps
+        nt = 300 # Nb time steps
         wave_period = 10
 
         X0, XN = X[0].data,X[-1].data
@@ -665,7 +665,7 @@ if __name__ == '__main__':
 
     elif test=='eddy':
         idt0=15 #22
-        ncin = xa.open_dataset('examples/idealized_input.nc')
+        ncin = xa.open_dataset('../notebooks/idealized_input.nc')
         U = ncin.U[idt0::,:,:]
         V = ncin.V[idt0::,:,:]
         X = ncin.x.data
@@ -676,7 +676,7 @@ if __name__ == '__main__':
         nb_wave_rays = 200#550#nx
         T = 3000
         print("T={}h".format(T/3600))
-        nt = 800
+        nt = 300
         wave_period = 5
         X0, XN = X[0], X[-1]
         Y0, YN = Y[0], Y[-1]
@@ -690,7 +690,7 @@ if __name__ == '__main__':
 
     elif test=='zero':
         idt0=15 #22
-        ncin = xa.open_dataset('examples/idealized_input.nc')
+        ncin = xa.open_dataset('../notebooks/idealized_input.nc')
         U = ncin.U_zero[idt0::,:,:]
         V = ncin.V_zero[idt0::,:,:]
         X = ncin.x.data
@@ -701,7 +701,7 @@ if __name__ == '__main__':
         nb_wave_rays = 200#550#nx
         T = 1000
         print("T={}h".format(T/3600))
-        nt = 500
+        nt = 300
         wave_period = 20
         X0, XN = X[0], X[-1]
         Y0, YN = Y[0], Y[-1]
@@ -790,7 +790,7 @@ if __name__ == '__main__':
     plot_single_ray = True
     if plot_single_ray:
         ray_id = 105
-        idts = np.arange(100,450,120)
+        idts = np.arange(100,300,70)
         fig3,ax3 = plt.subplots(nrows=4,ncols=1,figsize=(16,10),gridspec_kw={'height_ratios': [3, 1,1,1]})
 
         pc=ax3[0].contourf(wt.x,wt.y,-wt.d,shading='auto',cmap=cm.deep,levels=25)
