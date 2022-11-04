@@ -1,0 +1,48 @@
+{
+    "k": {
+        "long_name": "wave_number",
+        "standard_name": "sea_surface_wave_mean_wavenumber_from_variance_spectral_density_first_wavenumber_moment",
+        "units": "m-1"
+    },
+    "kx": {
+        "long_name": "wave_number_x_component",
+        "standard_name": "sea_surface_wave_mean_wavenumber_from_variance_spectral_density_first_wavenumber_moment",
+        "units": "m-1"
+    },
+    "ky": {
+        "long_name": "wave_number_y_component",
+        "standard_name": "sea_surface_wave_mean_wavenumber_from_variance_spectral_density_first_wavenumber_moment",
+        "units": "m-1"
+    },
+    "xr": {
+        "long_name": "x_position_wave_ray",
+        "standard_name": "projection_x_coordinate",
+        "units": "m"
+    },
+    "yr": {
+        "long_name": "y_position_wave_ray",
+        "standard_name": "projection_y_coordinate",
+        "units": "m"
+    },
+    "theta": {
+        "long_name": "wave_ray_direction",
+        "standard_name": "sea_surface_wave_to_direction",
+        "units": "degree",
+        "description": "theta follow a right handed coordinate system with theta=0 being parallel to the x-axis and propagating in the positive x-direction, theta=0.5pi being parallel to the y-axis and propagating in the positive y-direction, theta=pi being parallel to the x-axis and propagating in the negative x-direction, and theta=1.5pi being parallel to the y-axis and propagating in the negative y-direction."
+    },
+    "cg_i": {
+        "long_name": "wave intrinsic group speed",
+        "standard_name": "",
+        "units": "ms-1"
+    },
+    "lat": {
+        "long_name": "latitude",
+        "standard_name": "latitude",
+        "units": "degrees_north"
+    },
+    "lon": {
+        "long_name": "longitude",
+        "standard_name": "longitude",
+        "units": "degrees_east"
+    }
+}

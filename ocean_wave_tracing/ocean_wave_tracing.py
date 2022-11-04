@@ -5,14 +5,16 @@ import xarray as xa
 import pyproj
 import sys
 import cmocean.cm as cm
-import pandas as pd
 from netCDF4 import Dataset
+import json
 
 import warnings
 #suppress warnings
 warnings.filterwarnings('ignore')
 
 import util_solvers as uts
+from util_methods import make_xarray_dataArray
+
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename='ocean_wave_tracing.log', level=logging.INFO)
@@ -531,6 +533,16 @@ class Wave_tracing():
         self.cg_i = cg_i
         logging.info('Stoppet at time idt: {}'.format(velocity_idt[n]))
 
+    def to_ds(self):
+        with open('ray_metadata.json') as f:
+            data = json.load(f)
+
+        # relative time
+        t = np.linspace(0,self.T,self.nt)
+        ray_id = np.arange(nb_wave_rays)
+
+        vars = make_xarray_dataArray(var=self.k, t=t,rays=ray_id,name='k',attribs=data['k'])
+        print(vars)
 
     def to_NetCDF(self,fname,**kwargs):
 
