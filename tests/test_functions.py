@@ -2,12 +2,7 @@ import pytest
 import sys, os
 import numpy as np
 import pyproj
-#testdir = os.path.dirname(os.getcwd() + '/')
-#srcdir = '..'
-#sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 
-#from ocean_wave_tracing import Wave_tracing
-#from .. import ocean_wave_tracing
 from ocean_wave_tracing import Wave_tracing
 
 @pytest.fixture
@@ -37,33 +32,7 @@ def my_wave():
                  nb_wave_rays, X0, XN, Y0, YN,
                  temporal_evolution=False, T0=None,d=d)
     return wt
-"""
-@pytest.fixture
-def my_wave_sw(): #shallow water wave
-    nx = 20
-    ny = 20
-    nt = 10
-    T = 25
-    dx=dy=10
 
-    U = np.zeros((nx,ny))
-    V = np.zeros((nx,ny))
-    X = np.arange(nx)
-    Y = np.arange(nx)
-
-    nb_wave_rays = 10
-
-    theta0 = 0
-    wave_period = 714 # [s]
-    X0, XN = X[0],X[-1]
-    Y0, YN = Y[0],Y[-1]
-    incoming_wave_side = 'left'
-
-    wt = Wave_tracing(U, V,  nx, ny, nt, T, dx, dy,
-                 nb_wave_rays, X0, XN, Y0, YN,
-                 temporal_evolution=False, T0=None,d=d)
-    return wt
-"""
 @pytest.fixture
 def my_directions():
     idxs = np.arange(1,9)

@@ -12,8 +12,9 @@ import warnings
 #suppress warnings
 warnings.filterwarnings('ignore')
 
-import util_solvers as uts
-from util_methods import make_xarray_dataArray, to_xarray_ds
+#import util_solvers as uts
+from .util_solvers import Advection, WaveNumberEvolution, RungeKutta4
+from .util_methods import make_xarray_dataArray, to_xarray_ds
 
 
 logger = logging.getLogger(__name__)
@@ -285,17 +286,6 @@ class Wave_tracing():
 
         nb_wave_rays = self.nb_wave_rays
 
-        """
-        hvis iws:
-            velg iws
-            hvis iws invalid
-               set left
-        hvis ikke iws:
-            sjekk ipx, ipy,
-            whis ikke
-                velg iws=left
-        """
-
         valid_sides = ['left', 'right','top','bottom']
 
         if 'incoming_wave_side' in kwargs:
@@ -376,7 +366,7 @@ class Wave_tracing():
         self.theta[:,0] = theta0
 
 
-    def solve(self, solver=uts.RungeKutta4):
+    def solve(self, solver=RungeKutta4):
         """ Solve the geometrical optics equations numerically by means of the
             method of characteristics
         """
@@ -440,10 +430,10 @@ class Wave_tracing():
             cg_i[:,n+1] = self.c_intrinsic(k[:,n],d=ray_depth,group_velocity=True)
 
             # ADVECTION
-            f_adv = uts.Advection(cg=cg_i[:,n+1], k=k[:,n], kx=kx[:,n], U=U[velocity_idt[n],idys,idxs])
+            f_adv = Advection(cg=cg_i[:,n+1], k=k[:,n], kx=kx[:,n], U=U[velocity_idt[n],idys,idxs])
             xr[:,n+1] = solver.advance(u=xr[:,n], f=f_adv,k=n,t=t)
 
-            f_adv = uts.Advection(cg=cg_i[:,n+1], k=k[:,n], kx=ky[:,n], U=V[velocity_idt[n],idys,idxs])
+            f_adv = Advection(cg=cg_i[:,n+1], k=k[:,n], kx=ky[:,n], U=V[velocity_idt[n],idys,idxs])
             yr[:,n+1] = solver.advance(u=yr[:,n], f=f_adv, k=n, t=t)
 
 
@@ -451,11 +441,11 @@ class Wave_tracing():
             self.dsigma_dx[:,n+1] = self.dsigma(k[:,n], idxs, idys, self.dx,direction='x')
             self.dsigma_dy[:,n+1] = self.dsigma(k[:,n], idxs, idys, self.dx,direction='y')
 
-            f_wave_nb = uts.WaveNumberEvolution(d_sigma=self.dsigma_dx[:,n+1], kx=kx[:,n], ky=ky[:,n],
+            f_wave_nb = WaveNumberEvolution(d_sigma=self.dsigma_dx[:,n+1], kx=kx[:,n], ky=ky[:,n],
                                                dUkx=dudx[velocity_idt[n],idys,idxs], dUky=dvdx[velocity_idt[n],idys,idxs])
             kx[:,n+1] = solver.advance(u=kx[:,n], f=f_wave_nb,k=n, t=t)
 
-            f_wave_nb = uts.WaveNumberEvolution(d_sigma=self.dsigma_dy[:,n+1], kx=kx[:,n], ky=ky[:,n],
+            f_wave_nb = WaveNumberEvolution(d_sigma=self.dsigma_dy[:,n+1], kx=kx[:,n], ky=ky[:,n],
                                                dUkx=dudy[velocity_idt[n],idys,idxs], dUky=dvdy[velocity_idt[n],idys,idxs])
             ky[:,n+1] = solver.advance(u=ky[:,n], f=f_wave_nb, k=n, t=t)
 
@@ -729,8 +719,8 @@ if __name__ == '__main__':
     wt.set_initial_condition(wave_period=wave_period, theta0=theta0,
                              incoming_wave_side=i_w_side,
                              ipx=initial_position_x,ipy=initial_position_y)
-    #wt.solve(solver=uts.ForwardEuler)
-    wt.solve(solver=uts.RungeKutta4)
+    #wt.solve(solver=ForwardEuler)
+    wt.solve(solver=RungeKutta4)
 
 
     ### PLOTTING ###
