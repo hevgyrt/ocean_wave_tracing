@@ -12,9 +12,10 @@ import warnings
 #suppress warnings
 warnings.filterwarnings('ignore')
 
-#import util_solvers as uts
 from .util_solvers import Advection, WaveNumberEvolution, RungeKutta4
 from .util_methods import make_xarray_dataArray, to_xarray_ds
+#from util_solvers import Advection, WaveNumberEvolution, RungeKutta4
+#from util_methods import make_xarray_dataArray, to_xarray_ds
 
 
 logger = logging.getLogger(__name__)
@@ -83,13 +84,15 @@ class Wave_tracing():
 
 
         # Setting up the wave rays
-        self.xr = np.zeros((nb_wave_rays,nt))
-        self.yr = np.zeros((nb_wave_rays,nt))
-        self.kx = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
-        self.ky = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
-        self.k = np.zeros((nb_wave_rays,nt))#np.zeros(nt)
-        self.theta = np.ma.zeros((nb_wave_rays,nt))
-        self.cg_i = np.ma.zeros((nb_wave_rays,nt)) #intrinsic group velocity
+        self.ray_x = np.zeros((nb_wave_rays,nt))
+        self.ray_y = np.zeros((nb_wave_rays,nt))
+        self.ray_kx = np.zeros((nb_wave_rays,nt))
+        self.ray_ky = np.zeros((nb_wave_rays,nt))
+        self.ray_k = np.zeros((nb_wave_rays,nt))
+        self.ray_theta = np.ma.zeros((nb_wave_rays,nt))
+        self.ray_cg = np.ma.zeros((nb_wave_rays,nt)) #intrinsic group velocity
+        self.ray_U = np.ma.zeros((nb_wave_rays,nt)) # U component closest to ray
+        self.ray_V = np.ma.zeros((nb_wave_rays,nt)) # V component closest to ray
 
         # bathymetry gradient
         self.dsigma_dx = np.ma.zeros((nb_wave_rays,nt))
@@ -97,15 +100,60 @@ class Wave_tracing():
         # make xarray data array of velocity field
 
         if not type(U) == xa.DataArray:
-            self.U = xa.DataArray(U)
-            self.V = xa.DataArray(V)
+            #self.U = xa.DataArray(U)
+            self.U = xa.DataArray(data=U,
+                             dims=['y','x'],
+                             coords=dict(
+                                    x=(['x'], self.x),
+                                    y=(['y'], self.y),
+                                    )
+                            )
+            #self.V = xa.DataArray(V)
+            self.V = xa.DataArray(data=V,
+                             dims=['y','x'],
+                             coords=dict(
+                                    x=(['x'], self.x),
+                                    y=(['y'], self.y),
+                                    )
+                            )
             if not temporal_evolution:
                 self.U = self.U.expand_dims('time')
                 self.V = self.V.expand_dims('time')
         else:
-            self.U = U
-            self.V = V
-            if not 'time' in self.U.dims:
+
+            if 'time' in U.dims:
+                self.U = xa.DataArray(data=U.data,
+                                dims=['time','y','x'],
+                                coords=dict(
+                                        time=(['time'],U.time.values),
+                                        x=(['x'], self.x),
+                                        y=(['y'], self.y),
+                                        )
+                                )
+                self.V = xa.DataArray(data=V.data,
+                                dims=['time','y','x'],
+                                coords=dict(
+                                        time=(['time'],V.time.values),
+                                        x=(['x'], self.x),
+                                        y=(['y'], self.y),
+                                        )
+                                )
+            else:
+                self.U = xa.DataArray(data=U,
+                                dims=['y','x'],
+                                coords=dict(
+                                        x=(['x'], self.x),
+                                        y=(['y'], self.y),
+                                        )
+                                )
+                self.V = xa.DataArray(data=V,
+                                dims=['y','x'],
+                                coords=dict(
+                                        x=(['x'], self.x),
+                                        y=(['y'], self.y),
+                                        )
+                                )
+
                 self.U = self.U.expand_dims('time')
                 self.V = self.V.expand_dims('time')
 
@@ -114,14 +162,12 @@ class Wave_tracing():
         self.nb_velocity_time_steps = len(self.U.time)
         if not temporal_evolution:
             self.velocity_idt = np.zeros(nt,dtype=int)
-            logging.info('Vel idt : {}'.format(self.velocity_idt))
+            #logging.info('Vel idt : {}'.format(self.velocity_idt))
         else:
             t_velocity_field = U.time.data
             self.T0 = t_velocity_field[0]
             t_wr = np.arange(self.T0, self.T0+np.timedelta64(T,'s'),np.timedelta64(int(((T/nt)*1e3)),'ms'))
             self.velocity_idt = np.array([self.find_nearest(t_velocity_field,t_wr[i]) for i in range(len(t_wr))])
-            logging.info('Vel idt : {}'.format(self.velocity_idt))
-            logging.info('length: {}, {}'.format(len(self.velocity_idt),nt))
 
         self.kwargs = kwargs
 
@@ -248,8 +294,8 @@ class Wave_tracing():
 
         Returns:
             k0 (float): wave number
-            kx0 (float): wave number in x-direction
-            ky0 (float): wave number in y-direction
+            ray_kx0 (float): wave number in x-direction
+            ray_ky0 (float): wave number in y-direction
         """
         g=self.g
 
@@ -262,7 +308,7 @@ class Wave_tracing():
 
         kx = k*np.cos(theta)
         ky = k*np.sin(theta)
-        logger.info('wave: {}, {},{}'.format(k,kx,ky))
+        #logger.info('wave: {}, {},{}'.format(k,kx,ky))
         return k,kx,ky
 
 
@@ -344,8 +390,8 @@ class Wave_tracing():
                 ys = np.linspace(self.domain_Y0, self.domain_YN, nb_wave_rays)
 
 
-        self.xr[:,0] = xs
-        self.yr[:,0] = ys
+        self.ray_x[:,0] = xs
+        self.ray_y[:,0] = ys
 
 
         #Theta0
@@ -360,10 +406,10 @@ class Wave_tracing():
 
         # set inital wave
         for i in range(nb_wave_rays):
-            self.k[i,0], self.kx[i,0], self.ky[i,0] = self.wave(T=wave_period,
+            self.ray_k[i,0], self.ray_kx[i,0], self.ray_ky[i,0] = self.wave(T=wave_period,
                                                                 theta=theta0[i],
                                                                 d=self.d.sel(y=ys[i],x=xs[i],method='nearest'))
-        self.theta[:,0] = theta0
+        self.ray_theta[:,0] = theta0
 
 
     def solve(self, solver=RungeKutta4):
@@ -374,13 +420,15 @@ class Wave_tracing():
         if not callable(solver):
             raise TypeError('f is %s, not a solver' % type(solver))
 
-        k = self.k
-        kx= self.kx
-        ky= self.ky
-        xr= self.xr
-        yr= self.yr
-        theta= self.theta
-        cg_i = self.cg_i
+        ray_k = self.ray_k
+        ray_kx= self.ray_kx
+        ray_ky= self.ray_ky
+        ray_x= self.ray_x
+        ray_y= self.ray_y
+        ray_theta= self.ray_theta
+        ray_cg = self.ray_cg
+        ray_U = self.ray_U
+        ray_V = self.ray_V
 
         dx = self.dx
         dy = self.dy
@@ -415,47 +463,49 @@ class Wave_tracing():
         for n in range(0,nt-1):
 
             # find indices for each wave ray
-            idxs = np.array([self.find_nearest(x,xval) for xval in xr[:,n]])
-            idys = np.array([self.find_nearest(y,yval) for yval in yr[:,n]])
+            idxs = np.array([self.find_nearest(x,xval) for xval in ray_x[:,n]])
+            idys = np.array([self.find_nearest(y,yval) for yval in ray_y[:,n]])
 
             ray_depth = self.d.isel(y=xa.DataArray(idys,dims='z'),x=xa.DataArray(idxs,dims='z'))
             self.ray_depth[:,n] = ray_depth
 
+            self.ray_U[:,n] = self.U.isel(time=velocity_idt[n], y=xa.DataArray(idys,dims='z'),x=xa.DataArray(idxs,dims='z'))
+            self.ray_V[:,n] = self.V.isel(time=velocity_idt[n], y=xa.DataArray(idys,dims='z'),x=xa.DataArray(idxs,dims='z'))
 
             #======================================================
             ### numerical integration of the wave ray equations ###
             #======================================================
 
             # Compute group velocity
-            cg_i[:,n+1] = self.c_intrinsic(k[:,n],d=ray_depth,group_velocity=True)
+            ray_cg[:,n+1] = self.c_intrinsic(ray_k[:,n],d=ray_depth,group_velocity=True)
 
             # ADVECTION
-            f_adv = Advection(cg=cg_i[:,n+1], k=k[:,n], kx=kx[:,n], U=U[velocity_idt[n],idys,idxs])
-            xr[:,n+1] = solver.advance(u=xr[:,n], f=f_adv,k=n,t=t)
+            f_adv = Advection(cg=ray_cg[:,n+1], k=ray_k[:,n], kx=ray_kx[:,n], U=U[velocity_idt[n],idys,idxs])
+            ray_x[:,n+1] = solver.advance(u=ray_x[:,n], f=f_adv,k=n,t=t) # NOTE: this k is a counter and not wave number
 
-            f_adv = Advection(cg=cg_i[:,n+1], k=k[:,n], kx=ky[:,n], U=V[velocity_idt[n],idys,idxs])
-            yr[:,n+1] = solver.advance(u=yr[:,n], f=f_adv, k=n, t=t)
+            f_adv = Advection(cg=ray_cg[:,n+1], k=ray_k[:,n], kx=ray_ky[:,n], U=V[velocity_idt[n],idys,idxs])
+            ray_y[:,n+1] = solver.advance(u=ray_y[:,n], f=f_adv, k=n, t=t)# NOTE: this k is a counter and not wave number
 
 
             # EVOLUTION IN WAVE NUMBER
-            self.dsigma_dx[:,n+1] = self.dsigma(k[:,n], idxs, idys, self.dx,direction='x')
-            self.dsigma_dy[:,n+1] = self.dsigma(k[:,n], idxs, idys, self.dx,direction='y')
+            self.dsigma_dx[:,n+1] = self.dsigma(ray_k[:,n], idxs, idys, self.dx,direction='x')
+            self.dsigma_dy[:,n+1] = self.dsigma(ray_k[:,n], idxs, idys, self.dx,direction='y')
 
-            f_wave_nb = WaveNumberEvolution(d_sigma=self.dsigma_dx[:,n+1], kx=kx[:,n], ky=ky[:,n],
+            f_wave_nb = WaveNumberEvolution(d_sigma=self.dsigma_dx[:,n+1], kx=ray_kx[:,n], ky=ray_ky[:,n],
                                                dUkx=dudx[velocity_idt[n],idys,idxs], dUky=dvdx[velocity_idt[n],idys,idxs])
-            kx[:,n+1] = solver.advance(u=kx[:,n], f=f_wave_nb,k=n, t=t)
+            ray_kx[:,n+1] = solver.advance(u=ray_kx[:,n], f=f_wave_nb,k=n, t=t)# NOTE: this k is a counter and not wave number
 
-            f_wave_nb = WaveNumberEvolution(d_sigma=self.dsigma_dy[:,n+1], kx=kx[:,n], ky=ky[:,n],
+            f_wave_nb = WaveNumberEvolution(d_sigma=self.dsigma_dy[:,n+1], kx=ray_kx[:,n], ky=ray_ky[:,n],
                                                dUkx=dudy[velocity_idt[n],idys,idxs], dUky=dvdy[velocity_idt[n],idys,idxs])
-            ky[:,n+1] = solver.advance(u=ky[:,n], f=f_wave_nb, k=n, t=t)
+            ray_ky[:,n+1] = solver.advance(u=ray_ky[:,n], f=f_wave_nb, k=n, t=t)# NOTE: this k is a counter and not wave number
 
             # Compute k
-            k[:,n+1] = np.sqrt(kx[:,n+1]**2+ky[:,n+1]**2)
+            ray_k[:,n+1] = np.sqrt(ray_kx[:,n+1]**2+ray_ky[:,n+1]**2)
 
             # THETA
-            theta[:,n+1] = np.arctan2(ky[:,n+1],kx[:,n+1])
+            ray_theta[:,n+1] = np.arctan2(ray_ky[:,n+1],ray_kx[:,n+1])
             #keep angles between 0 and 2pi
-            theta[:,n+1] = theta[:,n+1]%(2*np.pi)
+            ray_theta[:,n+1] = ray_theta[:,n+1]%(2*np.pi)
 
 
             counter += 1
@@ -477,16 +527,16 @@ class Wave_tracing():
                     fig3,ax3 = plt.subplots(nrows=4,ncols=1,figsize=(16,10),gridspec_kw={'height_ratios': [3, 1,1,1]})
                     pc=ax3[0].contourf(self.x,self.y,-self.d,shading='auto',cmap=cm.deep_r,levels=25)
                     for id in wr_id:
-                        ax3[0].plot(self.xr[id,:n+1],self.yr[id,:n+1],'-k')
+                        ax3[0].plot(self.ray_x[id,:n+1],self.ray_y[id,:n+1],'-k')
 
-                    ax3[0].plot(wt.xr[wr_id[2],idts],wt.yr[wr_id[2],idts],marker='s',ms=7,color='tab:red',linestyle='none')
+                    ax3[0].plot(wt.ray_x[wr_id[2],idts],wt.ray_y[wr_id[2],idts],marker='s',ms=7,color='tab:red',linestyle='none')
 
                     ax3[0].xaxis.tick_top()
 
                     ax3[1].plot(-wt.ray_depth[wr_id[2],:1090], label=r'$d(x_r,y_r)$')
-                    ax3[2].plot(wt.kx[wr_id[2],:1090], label=r'$k_x$')
-                    ax3[2].plot(wt.ky[wr_id[2],:1090], label=r'$k_y$',c='tab:green')
-                    ax3[3].plot(wt.theta[wr_id[2],:1090], label=r'$\theta$')
+                    ax3[2].plot(wt.ray_kx[wr_id[2],:1090], label=r'$k_x$')
+                    ax3[2].plot(wt.ray_ky[wr_id[2],:1090], label=r'$k_y$',c='tab:green')
+                    ax3[3].plot(wt.ray_theta[wr_id[2],:1090], label=r'$\theta$')
 
                     ax3[2].sharex(ax3[1])
                     ax3[3].sharex(ax3[1])
@@ -514,13 +564,13 @@ class Wave_tracing():
         self.dudx = dudx
         self.dvdy = dvdy
         self.dvdx = dvdx
-        self.k = k
-        self.kx= kx
-        self.ky= ky
-        self.xr= xr
-        self.yr= yr
-        self.theta = theta
-        self.cg_i = cg_i
+        self.ray_k = ray_k
+        self.ray_kx= ray_kx
+        self.ray_ky= ray_ky
+        self.ray_x= ray_x
+        self.ray_y= ray_y
+        self.ray_theta = ray_theta
+        self.ray_cg = ray_cg
         logging.info('Stoppet at time idt: {}'.format(velocity_idt[n]))
 
     def to_ds(self,**kwargs):
@@ -531,15 +581,18 @@ class Wave_tracing():
             lons = np.zeros((self.nb_wave_rays,self.nt))
             lats = lons.copy()
 
-        variables = {'k':self.k,
-                    'kx':self.kx,
-                    'ky':self.ky,
-                    'xr':self.xr,
-                    'yr':self.yr,
-                    'theta':self.theta,
-                    'cg_i':self.cg_i,
-                    'lat': lats,
-                    'lon':lons
+        variables = {'ray_k':self.ray_k,
+                    'ray_kx':self.ray_kx,
+                    'ray_ky':self.ray_ky,
+                    'ray_x':self.ray_x,
+                    'ray_y':self.ray_y,
+                    'ray_U':self.ray_U,
+                    'ray_V':self.ray_V,
+                    'ray_theta':self.ray_theta,
+                    'ray_cg':self.ray_cg,
+                    'ray_depth':self.ray_depth,
+                    'ray_lat': lats,
+                    'ray_lon':lons
                     }
 
         with open('ray_metadata.json') as f:
@@ -582,15 +635,15 @@ class Wave_tracing():
                 for idy in range(len(ys)-1):
                     y0, yn = ys[idy],ys[idy+1]
                     counter+=1
-                    valid_x = (self.xr[i,:]>x0)*(self.xr[i,:]<xn)
-                    if (np.any((self.yr[i,:][valid_x]>y0)*(self.yr[i,:][valid_x]<yn))):
+                    valid_x = (self.ray_x[i,:]>x0)*(self.ray_x[i,:]<xn)
+                    if (np.any((self.ray_y[i,:][valid_x]>y0)*(self.ray_y[i,:][valid_x]<yn))):
                         hm[idy,idx]+=1
 
         if plot:
             plt.pcolormesh(xx,yy,hm)
             plt.colorbar()
             for i in range(0,self.nb_wave_rays):
-                plt.plot(self.xr[i,:],self.yr[i,:],'-r',alpha=0.3)
+                plt.plot(self.ray_x[i,:],self.ray_y[i,:],'-r',alpha=0.3)
             plt.scatter(xx,yy);plt.show()
 
         return xx,yy,hm
@@ -609,7 +662,7 @@ class Wave_tracing():
         lons = np.zeros((self.nb_wave_rays,self.nt))
         #print(pyproj.__dict__.keys())
         for i in range(self.nb_wave_rays):
-            lons[i,:],lats[i,:] = pyproj.Transformer.from_proj(proj4,'epsg:4326', always_xy=True).transform(self.xr[i,:], self.yr[i,:])
+            lons[i,:],lats[i,:] = pyproj.Transformer.from_proj(proj4,'epsg:4326', always_xy=True).transform(self.ray_x[i,:], self.ray_y[i,:])
 
         return lons, lats
 
@@ -648,8 +701,8 @@ if __name__ == '__main__':
         V = ncin.V[idt0::,:,:]
         X = ncin.x.data
         Y = ncin.y.data
-        nx = len(Y)
-        ny = len(X)
+        nx = len(X)
+        ny = len(Y)
         dx=dy=X[1]-X[0]
         nb_wave_rays = 200#550#nx
         T = 3000
@@ -673,8 +726,8 @@ if __name__ == '__main__':
         V = ncin.V_zero[idt0::,:,:]
         X = ncin.x.data
         Y = ncin.y.data
-        nx = len(Y)
-        ny = len(X)
+        nx = len(X)
+        ny = len(Y)
         dx=dy=X[1]-X[0]
         nb_wave_rays = 200#550#nx
         T = 1000
@@ -694,7 +747,7 @@ if __name__ == '__main__':
     i_w_side = 'left'#'top'
     if i_w_side == 'left':
         theta0 = 0.12 #Initial wave propagation direction
-        theta0 = np.linspace(0,np.pi,nb_wave_rays) #Initial wave propagation direction
+        #theta0 = np.linspace(0,np.pi,nb_wave_rays) #Initial wave propagation direction
     elif i_w_side == 'top':
         theta0 = 1.5*np.pi#0#np.pi/8 #Initial wave propagation direction
     elif i_w_side == 'right':
@@ -736,13 +789,13 @@ if __name__ == '__main__':
     elif test=='zero' and bathymetry:
         pc=ax.contourf(wt.x,wt.y,-d,shading='auto',cmap='viridis',levels=25)
 
-    ax.plot(wt.xr[:,0],wt.yr[:,0],'o')
+    ax.plot(wt.ray_x[:,0],wt.ray_y[:,0],'o')
     step=2
     for i in range(0,wt.nb_wave_rays,step):
-        ax.plot(wt.xr[i,:],wt.yr[i,:],'-k')
+        ax.plot(wt.ray_x[i,:],wt.ray_y[i,:],'-k')
 
     idts = np.arange(0,nt,40)
-    #ax.plot(wt.xr[:,idts],wt.yr[:,idts],'--k')
+    #ax.plot(wt.ray_x[:,idts],wt.ray_y[:,idts],'--k')
     cb = fig.colorbar(pc)
 
 
@@ -771,13 +824,13 @@ if __name__ == '__main__':
         fig3,ax3 = plt.subplots(nrows=4,ncols=1,figsize=(16,10),gridspec_kw={'height_ratios': [3, 1,1,1]})
 
         pc=ax3[0].contourf(wt.x,wt.y,-wt.d,shading='auto',cmap=cm.deep,levels=25)
-        ax3[0].plot(wt.xr[ray_id,:],wt.yr[ray_id,:],'-k')
-        ax3[0].plot(wt.xr[ray_id,0],wt.yr[ray_id,0],'o')
-        ax3[0].plot(wt.xr[ray_id,idts],wt.yr[ray_id,idts],'rs')
+        ax3[0].plot(wt.ray_x[ray_id,:],wt.ray_y[ray_id,:],'-k')
+        ax3[0].plot(wt.ray_x[ray_id,0],wt.ray_y[ray_id,0],'o')
+        ax3[0].plot(wt.ray_x[ray_id,idts],wt.ray_y[ray_id,idts],'rs')
 
         ax3[1].plot(wt.ray_depth[ray_id,:],label='depth');
-        ax3[2].plot(wt.kx[ray_id,:],label='kx')
-        ax3[3].plot(wt.ky[ray_id,:], label='ky')
+        ax3[2].plot(wt.ray_kx[ray_id,:],label='ray_kx')
+        ax3[3].plot(wt.ray_ky[ray_id,:], label='ray_ky')
 
         ax3[2].sharex(ax3[1])
         ax3[3].sharex(ax3[1])

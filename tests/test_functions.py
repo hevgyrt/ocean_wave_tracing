@@ -51,8 +51,8 @@ def test_wave_celerity_dw(my_wave):
     wave_period = 5
     my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0)
 
-    assert my_wave.c_intrinsic(my_wave.k[0,0],group_velocity=False) == ((2*np.pi/wave_period)/ my_wave.k[0,0])
-    assert my_wave.c_intrinsic(my_wave.k[0,0],group_velocity=True) == 0.5*((2*np.pi/wave_period)/ my_wave.k[0,0])
+    assert my_wave.c_intrinsic(my_wave.ray_k[0,0],group_velocity=False) == ((2*np.pi/wave_period)/ my_wave.ray_k[0,0])
+    assert my_wave.c_intrinsic(my_wave.ray_k[0,0],group_velocity=True) == 0.5*((2*np.pi/wave_period)/ my_wave.ray_k[0,0])
 
 def test_wave_celerity_sw(my_wave):
     theta0 = 0
@@ -60,18 +60,18 @@ def test_wave_celerity_sw(my_wave):
 
     my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0)
 
-    assert my_wave.c_intrinsic(my_wave.k[0,0],d=my_wave.d.values[0,0],group_velocity=False) == pytest.approx(np.sqrt(my_wave.g*my_wave.d.values[0,0]), 1e-3)
-    assert my_wave.c_intrinsic(my_wave.k[0,0],d=my_wave.d.values[0,0],group_velocity=True) == pytest.approx(np.sqrt(my_wave.g*my_wave.d.values[0,0]), 1e-3)
+    assert my_wave.c_intrinsic(my_wave.ray_k[0,0],d=my_wave.d.values[0,0],group_velocity=False) == pytest.approx(np.sqrt(my_wave.g*my_wave.d.values[0,0]), 1e-3)
+    assert my_wave.c_intrinsic(my_wave.ray_k[0,0],d=my_wave.d.values[0,0],group_velocity=True) == pytest.approx(np.sqrt(my_wave.g*my_wave.d.values[0,0]), 1e-3)
 
 def test_intrinsic_frequency(my_wave):
     theta0 = 0
     wave_period = 5
     my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0)
 
-    k = my_wave.k[0,0]
+    k = my_wave.ray_k[0,0]
 
-    assert my_wave.sigma(my_wave.k[0,0],d=1000) == pytest.approx(np.sqrt(9.81*k*np.tanh(k*1000)), 1e-3) # Deep water
-    assert my_wave.sigma(my_wave.k[0,0],d=25) == pytest.approx(np.sqrt(9.81*k*np.tanh(k*25)), 1e-3) # intermediate depth
+    assert my_wave.sigma(my_wave.ray_k[0,0],d=1000) == pytest.approx(np.sqrt(9.81*k*np.tanh(k*1000)), 1e-3) # Deep water
+    assert my_wave.sigma(my_wave.ray_k[0,0],d=25) == pytest.approx(np.sqrt(9.81*k*np.tanh(k*25)), 1e-3) # intermediate depth
 
 def test_wave_properties(my_wave):
     theta0 = 0

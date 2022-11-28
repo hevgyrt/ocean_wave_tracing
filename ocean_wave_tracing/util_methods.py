@@ -34,7 +34,7 @@ def to_xarray_ds(v,latlon=False):
     ds['time'].attrs = {'long_name':'reference time for ray trajectory','units': 'seconds since start'}
     ds.attrs = {'creation_date':datetime.now()}
 
-    if (ds.lat==0).all() and (ds.lat==0).all():
-        ds['lat'].attrs = {'comment':'No latitude values provided'}
-        ds['lon'].attrs = {'comment':'No longitude values provided'}
+    if (ds.ray_lat==0).all() and (ds.ray_lat==0).all():
+        ds['ray_lat'].attrs = {'comment':'No latitude values provided'}
+        ds['ray_lon'].attrs = {'comment':'No longitude values provided'}
     return ds
