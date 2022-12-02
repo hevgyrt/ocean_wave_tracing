@@ -7,6 +7,7 @@ import sys
 import cmocean.cm as cm
 from netCDF4 import Dataset
 import json
+from importlib import resources
 
 import warnings
 #suppress warnings
@@ -59,6 +60,7 @@ class Wave_tracing():
         self.dx = dx
         self.dy = dy
         self.nb_wave_rays = nb_wave_rays
+        self.C = -1
         assert nb_wave_rays > 0, "Number of wave rays must be larger than zero"
 
         self.domain_X0 = domain_X0 # left side
@@ -201,6 +203,27 @@ class Wave_tracing():
                                     )
                             )
         return(d)
+
+    def check_CFL(self, cg, max_speed):
+        """ Method for checking the Courant, Friedrichs, and Lewy
+            condition for numerical intergration
+        """
+        dt = self.dt
+        DX = np.max([self.dx,self.dy])
+
+        assert cg>=0, "Group velocity must be positive"
+        assert max_speed>=0,  "Maximum current speed must be positive"
+
+        u = cg+max_speed
+
+        C = u*(dt/DX)
+
+        if C<1:
+            logger.info('Courant number is {}'.format(np.round(C,2)))
+        else:
+            logger.warning('Courant number is {}'.format(np.round(C,2)))
+        self.C = C
+
 
     def find_nearest(self,array, value):
         """ Method for finding neares indicies to value in array
@@ -409,7 +432,12 @@ class Wave_tracing():
             self.ray_k[i,0], self.ray_kx[i,0], self.ray_ky[i,0] = self.wave(T=wave_period,
                                                                 theta=theta0[i],
                                                                 d=self.d.sel(y=ys[i],x=xs[i],method='nearest'))
+            self.ray_cg[i,0] = self.c_intrinsic(k=self.ray_k[i,0],d=self.d.sel(y=ys[i],x=xs[i],method='nearest'),group_velocity=True)
+
         self.ray_theta[:,0] = theta0
+
+        #Check the CFL condition
+        self.check_CFL(cg=np.nanmax(self.ray_cg[:,0]),max_speed=np.nanmax(np.sqrt(self.U**2+self.V**2)))
 
 
     def solve(self, solver=RungeKutta4):
@@ -595,7 +623,7 @@ class Wave_tracing():
                     'ray_lon':lons
                     }
 
-        with open('ray_metadata.json') as f:
+        with resources.open_text('ocean_wave_tracing','ray_metadata.json') as f:
             data = json.load(f)
 
         # relative time
@@ -667,7 +695,7 @@ class Wave_tracing():
         return lons, lats
 
 if __name__ == '__main__':
-    test = 'eddy' #lofoten, eddy, zero
+    test = 'zero' #lofoten, eddy, zero
     bathymetry = True
 
     if test=='lofoten':
