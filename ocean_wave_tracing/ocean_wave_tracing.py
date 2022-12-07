@@ -81,7 +81,7 @@ class Wave_tracing():
             self.d = self.check_bathymetry(d)
         else:
             logging.warning('Hardcoding bathymetry if not given. Should be fixed')
-            self.d = self.check_bathymetry(np.ones((ny,nx))*1e9)
+            self.d = self.check_bathymetry(np.ones((ny,nx))*1e5)
         self.ray_depth = np.zeros((nb_wave_rays,nt))
 
 
@@ -218,7 +218,7 @@ class Wave_tracing():
 
         C = u*(dt/DX)
 
-        if C<1:
+        if C=<1:
             logger.info('Courant number is {}'.format(np.round(C,2)))
         else:
             logger.warning('Courant number is {}'.format(np.round(C,2)))
