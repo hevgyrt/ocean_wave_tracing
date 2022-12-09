@@ -27,7 +27,7 @@ def to_xarray_ds(v,latlon=False):
     ds = xa.Dataset()
 
     for var in v:
-        logger.info(f'Searching for variable {var}')
+        logger.info(f'Searching for variable {var.name}')
 
         ds[var.name] = var
 

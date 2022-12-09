@@ -2,6 +2,7 @@ import pytest
 import sys, os
 import numpy as np
 import pyproj
+import xarray as xa
 
 from ocean_wave_tracing import Wave_tracing
 
@@ -22,11 +23,8 @@ def my_wave():
 
     nb_wave_rays = 10
 
-    theta0 = 0
-    wave_period = 10
     X0, XN = X[0],X[-1]
     Y0, YN = Y[0],Y[-1]
-    incoming_wave_side = 'left'
 
     wt = Wave_tracing(U, V,  nx, ny, nt, T, dx, dy,
                  nb_wave_rays, X0, XN, Y0, YN,
@@ -102,3 +100,61 @@ def test_lat_lon(my_wave):
     lats, lons = my_wave.to_latlon(proj4)
     assert lats[0,0] == true_lat
     assert lons[0,0] == true_lon
+
+def test_setting_initial_positions(my_wave):
+
+    theta0 = np.pi*0.5
+    wave_period = 5
+    ipx,ipy = 5,5
+    incoming_wave_side='right'
+
+    # Check that side is chosen before ipx,ipy
+    my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0,incoming_wave_side=incoming_wave_side,ipx=ipx,ipy=ipy)
+    assert (my_wave.ray_x[:,0] == my_wave.domain_XN).all()
+    assert (my_wave.ray_y[:,0] == np.linspace(my_wave.domain_Y0,my_wave.domain_YN,my_wave.nb_wave_rays)).all()
+
+    # Check that ipx, ipy works
+    my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0,ipx=ipx,ipy=ipy)
+    assert (my_wave.ray_x[:,0] == ipx).all()
+    assert (my_wave.ray_y[:,0] == ipy).all()
+
+    # Check that 'left' is chosen when nothing is specified
+    my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0)
+    assert (my_wave.ray_x[:,0] == my_wave.domain_X0).all()
+    assert (my_wave.ray_y[:,0] == np.linspace(my_wave.domain_Y0,my_wave.domain_YN,my_wave.nb_wave_rays)).all()
+
+    # Check that 'left' is chosen when invalid side and no ipx, ipy are given
+    my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0,incoming_wave_side='NONE')
+    assert (my_wave.ray_x[:,0] == my_wave.domain_X0).all()
+    assert (my_wave.ray_y[:,0] == np.linspace(my_wave.domain_Y0,my_wave.domain_YN,my_wave.nb_wave_rays)).all()
+
+    # Check that numpy arrays for ipx,ipy works
+    ipx = np.linspace(0,4,my_wave.nb_wave_rays)
+    ipy =  np.linspace(2,4,my_wave.nb_wave_rays)
+    my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0,ipx=ipx,ipy=ipy)
+    assert (my_wave.ray_x[:,0] == ipx).all()
+    assert (my_wave.ray_y[:,0] == ipy).all()
+
+def test_to_ds(my_wave):
+
+    theta0 = np.pi
+    wave_period = 5
+    incoming_wave_side='right'
+
+    # Check that side is chosen before ipx,ipy
+    my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0,incoming_wave_side=incoming_wave_side)
+    my_wave.solve()
+    ds = my_wave.to_ds()
+
+    assert isinstance(ds,xa.Dataset)
+
+"""
+def test_dsigma(my_wave):
+
+    theta0 = np.pi
+    wave_period = 40
+    incoming_wave_side='right'
+
+    # Check that side is chosen before ipx,ipy
+    my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0,incoming_wave_side=incoming_wave_side)
+"""

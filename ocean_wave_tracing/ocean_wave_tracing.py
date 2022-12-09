@@ -82,7 +82,6 @@ class Wave_tracing():
         else:
             logging.warning('Hardcoding bathymetry if not given. Should be fixed')
             self.d = self.check_bathymetry(np.ones((ny,nx))*1e5)
-        self.ray_depth = np.zeros((nb_wave_rays,nt))
 
 
         # Setting up the wave rays
@@ -95,6 +94,7 @@ class Wave_tracing():
         self.ray_cg = np.ma.zeros((nb_wave_rays,nt)) #intrinsic group velocity
         self.ray_U = np.ma.zeros((nb_wave_rays,nt)) # U component closest to ray
         self.ray_V = np.ma.zeros((nb_wave_rays,nt)) # V component closest to ray
+        self.ray_depth = np.zeros((nb_wave_rays,nt))
 
         # bathymetry gradient
         self.dsigma_dx = np.ma.zeros((nb_wave_rays,nt))
@@ -182,11 +182,10 @@ class Wave_tracing():
         Returns:
             d (float): 2d xarray DataArray object
         """
-
+        logging.info('bathymetry checker should ideally support xarray ds or da')
         if np.any(d < 0) and np.any(d > 0):
             logger.warning('Depth is defined as positive. Thus, negative depth will be treated as Land.')
             d[d<0] = 0
-            return d
 
         if np.any(d < 0):
             logger.warning('Depth is defined as positive. Hence taking absolute value of input.')
@@ -211,17 +210,18 @@ class Wave_tracing():
         dt = self.dt
         DX = np.max([self.dx,self.dy])
 
-        assert cg>=0, "Group velocity must be positive"
-        assert max_speed>=0,  "Maximum current speed must be positive"
+        assert cg>=0, "Group velocity must be positive. Currently {}".format(cg)
+        assert max_speed>=0,  "Maximum current speed must be positive. Currently {}".format(max_speed)
 
         u = cg+max_speed
 
         C = u*(dt/DX)
 
-        if C=<1:
+        if C<=1:
             logger.info('Courant number is {}'.format(np.round(C,2)))
         else:
             logger.warning('Courant number is {}'.format(np.round(C,2)))
+
         self.C = C
 
 
@@ -256,6 +256,8 @@ class Wave_tracing():
 
         g=self.g
 
+        #('c_intrinsic() should be fixed with a flag or similar to avoid the two if statements')
+
         if d is None:
             c_in = np.sqrt(g/k)
             n=0.5
@@ -263,12 +265,22 @@ class Wave_tracing():
             c_in = np.sqrt((g/k)*np.tanh(k*d)) #intrinsic
             n = 0.5 * (1 + (2*k*d)/np.sinh(2*k*d))
 
+        """
+            nd = np.sinh(2*k*d)
+            n = 0.5*1
+
+            ndk = (nd>0.001).as('int32') # epsg
+            n[ndk] = n[ndk] + 0.5*(2*k*d)/nd[ndk]
+        group_velocity = np.array([group_velocity]).as('int32')
+        return c_in*group_velocity*n
+        """
+        #c_in = np.sqrt((g/k)*np.tanh(k*d)) #intrinsic
+        #n = 0.5 * (1 + (2*k*d)/np.sinh(2*k*d))
+
         if group_velocity:
             return c_in*n
-            #return 0.5*np.sqrt(g/k)
         else:
             return c_in
-            #return np.sqrt(g/k)
 
     def sigma(self,k,d):
         """ frequency dispersion relation
@@ -361,7 +373,7 @@ class Wave_tracing():
             i_w_side = kwargs['incoming_wave_side']
 
             if not i_w_side in valid_sides:
-                logger.info('No initial position or side given. Left will be used.')
+                logger.info('Invalid initial side. Left will be used.')
                 i_w_side = 'left'
 
             if i_w_side == 'left':
@@ -379,43 +391,42 @@ class Wave_tracing():
             elif i_w_side == 'bottom':
                 xs = np.linspace(self.domain_X0, self.domain_XN, nb_wave_rays)
                 ys = np.ones(nb_wave_rays)*self.domain_Y0
-                #if 'ipx' or 'ipy' in kwargs:
 
         else:
             logger.info('No initial side given. Try with discrete points')
-            try:
-                ipx = kwargs['ipx']
-                ipy = kwargs['ipy']
 
-                # First check initial position x
-                if type(ipx) is float:
-                    ipx = np.ones(nb_wave_rays)*ipx
-                    xs=ipx.copy()
-                elif isinstance(ipx,np.ndarray):
-                    assert nb_wave_rays == len(kwargs['ipx']), "Need same dimension on initial x-values"
-                    xs=ipx.copy()
-                else:
-                    logger.error('ipx must be either float or numpy array. Terminating.')
-                    sys.exit()
+            ipx = kwargs.get('ipx', None)
+            ipy = kwargs.get('ipy', None)
 
-                if type(ipy) is float:
-                    ipy = np.ones(nb_wave_rays)*ipy
-                    ys=ipy.copy()
-                elif isinstance(ipy,np.ndarray):
-                    assert nb_wave_rays == len(kwargs['ipy']), "Need same dimension on initial y-values"
-                    ys=ipy.copy()
-                else:
-                    logger.error('ipy must be either float or numpy array. Terminating.')
-                    sys.exit()
-            except:
-                logger.info('No initial position ponts given. Left will be used')
+            if ipx is None and ipy is None:
+                logger.info('No initial position points given. Left will be used')
                 xs = np.ones(nb_wave_rays)*self.domain_X0
                 ys = np.linspace(self.domain_Y0, self.domain_YN, nb_wave_rays)
 
+            else:
+                # First check initial position x
+                if np.isfinite(ipx).all():
+                    #Check if it is an array
+                    if isinstance(ipx,np.ndarray):
+                        assert nb_wave_rays == len(kwargs['ipx']), "Need same dimension on initial x-values"
+                        xs=ipx.copy()
+                    # if not, use it as single value
+                    else:
+                        ipx = np.ones(nb_wave_rays)*ipx
+                        xs=ipx.copy()
 
+                if np.isfinite(ipy).all():
+                    if isinstance(ipy,np.ndarray):
+                        assert nb_wave_rays == len(kwargs['ipy']), "Need same dimension on initial x-values"
+                        ys=ipy.copy()
+                    else:
+                        ipy = np.ones(nb_wave_rays)*ipy
+                        ys=ipy.copy()
+
+
+        # Set initial position
         self.ray_x[:,0] = xs
         self.ray_y[:,0] = ys
-
 
         #Theta0
         if type(theta0) is float or type(theta0) is int:
@@ -427,13 +438,14 @@ class Wave_tracing():
             sys.exit()
 
 
-        # set inital wave
+        # set inital wave properties
         for i in range(nb_wave_rays):
             self.ray_k[i,0], self.ray_kx[i,0], self.ray_ky[i,0] = self.wave(T=wave_period,
                                                                 theta=theta0[i],
                                                                 d=self.d.sel(y=ys[i],x=xs[i],method='nearest'))
             self.ray_cg[i,0] = self.c_intrinsic(k=self.ray_k[i,0],d=self.d.sel(y=ys[i],x=xs[i],method='nearest'),group_velocity=True)
 
+        # set inital wave propagation direction
         self.ray_theta[:,0] = theta0
 
         #Check the CFL condition
@@ -465,7 +477,7 @@ class Wave_tracing():
         V = self.V.data
 
         #Compute velocity gradients
-        logger.info('Assuming uniform horizontal resolution')
+        logger.info('Assuming uniform horizontal resolution in each direction')
         if self.nb_velocity_time_steps>1:
             dudy, dudx = np.gradient(U,dx)[1:3]
             dvdy, dvdx = np.gradient(V,dy)[1:3]
@@ -695,7 +707,7 @@ class Wave_tracing():
         return lons, lats
 
 if __name__ == '__main__':
-    test = 'zero' #lofoten, eddy, zero
+    test = 'eddy' #lofoten, eddy, zero
     bathymetry = True
 
     if test=='lofoten':
@@ -797,9 +809,9 @@ if __name__ == '__main__':
                             DEBUG=True)
 
 
-    wt.set_initial_condition(wave_period=wave_period, theta0=theta0,
-                             incoming_wave_side=i_w_side,
-                             ipx=initial_position_x,ipy=initial_position_y)
+    wt.set_initial_condition(wave_period=wave_period, theta0=theta0,)
+                             #incoming_wave_side=i_w_side,
+                             #ipx=initial_position_x,ipy=initial_position_y)
     #wt.solve(solver=ForwardEuler)
     wt.solve(solver=RungeKutta4)
 
