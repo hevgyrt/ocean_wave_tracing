@@ -47,10 +47,11 @@ def my_directions():
 def test_wave_celerity_dw(my_wave):
     theta0 = 0
     wave_period = 5
+    d=1e5
     my_wave.set_initial_condition(wave_period=wave_period,theta0=theta0)
 
-    assert my_wave.c_intrinsic(my_wave.ray_k[0,0],group_velocity=False) == ((2*np.pi/wave_period)/ my_wave.ray_k[0,0])
-    assert my_wave.c_intrinsic(my_wave.ray_k[0,0],group_velocity=True) == 0.5*((2*np.pi/wave_period)/ my_wave.ray_k[0,0])
+    assert my_wave.c_intrinsic(k=np.array([my_wave.ray_k[0,0]]),d=np.array([d]),group_velocity=False) == ((2*np.pi/wave_period)/ my_wave.ray_k[0,0])
+    assert my_wave.c_intrinsic(k=np.array([my_wave.ray_k[0,0]]),d=np.array([d]),group_velocity=True) == 0.5*((2*np.pi/wave_period)/ my_wave.ray_k[0,0])
 
 def test_wave_celerity_sw(my_wave):
     theta0 = 0

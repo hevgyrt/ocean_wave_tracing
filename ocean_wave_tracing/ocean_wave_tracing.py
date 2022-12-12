@@ -9,10 +9,6 @@ from netCDF4 import Dataset
 import json
 from importlib import resources
 
-import warnings
-#suppress warnings
-warnings.filterwarnings('ignore')
-
 from .util_solvers import Advection, WaveNumberEvolution, RungeKutta4
 from .util_methods import make_xarray_dataArray, to_xarray_ds
 #from util_solvers import Advection, WaveNumberEvolution, RungeKutta4
@@ -240,12 +236,13 @@ class Wave_tracing():
         return idx
 
 
-    def c_intrinsic(self,k,d=None,group_velocity=False):
+    def c_intrinsic(self,k,d,group_velocity=False):
         """ Method computing intrinsic wave phase and group velocity according
         to the general dispersion relation
 
         Args:
-            k: wave number
+            k (float): wave number (numpy array)
+            d (float): depth (numpy array)
             group_velocity (bool): returns group velocity (True) or phase
                 velocity (False)
 
@@ -255,27 +252,14 @@ class Wave_tracing():
         """
 
         g=self.g
+        dw_criteria = k*d>25
 
-        #('c_intrinsic() should be fixed with a flag or similar to avoid the two if statements')
-
-        if d is None:
+        if dw_criteria.all():
             c_in = np.sqrt(g/k)
             n=0.5
         else:
             c_in = np.sqrt((g/k)*np.tanh(k*d)) #intrinsic
             n = 0.5 * (1 + (2*k*d)/np.sinh(2*k*d))
-
-        """
-            nd = np.sinh(2*k*d)
-            n = 0.5*1
-
-            ndk = (nd>0.001).as('int32') # epsg
-            n[ndk] = n[ndk] + 0.5*(2*k*d)/nd[ndk]
-        group_velocity = np.array([group_velocity]).as('int32')
-        return c_in*group_velocity*n
-        """
-        #c_in = np.sqrt((g/k)*np.tanh(k*d)) #intrinsic
-        #n = 0.5 * (1 + (2*k*d)/np.sinh(2*k*d))
 
         if group_velocity:
             return c_in*n
