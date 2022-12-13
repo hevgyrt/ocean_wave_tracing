@@ -38,3 +38,36 @@ def to_xarray_ds(v,latlon=False):
         ds['ray_lat'].attrs = {'comment':'No latitude values provided'}
         ds['ray_lon'].attrs = {'comment':'No longitude values provided'}
     return ds
+
+
+def check_velocity_field(U,temporal_evolution,x,y):
+    """ Method checking and fixing velocity field input
+
+    Args:
+        U (float): 2d velocity field
+
+    Returns:
+        U (float): 2d xarray DataArray object
+    """
+
+    time_flag = False
+
+    if not type(U) == xa.DataArray:
+        U_out = xa.DataArray(data=U,
+                         dims=['y','x'],
+                         coords=dict(
+                                x=(['x'], x),
+                                y=(['y'], y),
+                                )
+                        )
+    else:
+        U_out = U
+        if 'time' in U.dims:
+            time_flag = True
+
+    if not time_flag:
+        U_out = U_out.expand_dims('time')
+
+    assert 'time' in U_out.dims, "Velocity field is missing time dimension."
+    
+    return U_out

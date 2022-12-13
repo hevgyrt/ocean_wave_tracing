@@ -10,9 +10,9 @@ import json
 from importlib import resources
 
 from .util_solvers import Advection, WaveNumberEvolution, RungeKutta4
-from .util_methods import make_xarray_dataArray, to_xarray_ds
+from .util_methods import make_xarray_dataArray, to_xarray_ds, check_velocity_field
 #from util_solvers import Advection, WaveNumberEvolution, RungeKutta4
-#from util_methods import make_xarray_dataArray, to_xarray_ds
+#from util_methods import make_xarray_dataArray, to_xarray_ds, check_velocity_field
 
 
 logger = logging.getLogger(__name__)
@@ -76,8 +76,9 @@ class Wave_tracing():
         if d is not None:
             self.d = self.check_bathymetry(d)
         else:
-            logging.warning('Hardcoding bathymetry if not given. Should be fixed')
-            self.d = self.check_bathymetry(np.ones((ny,nx))*1e5)
+            d_static = 1e5
+            logging.info('Hardcoding bathymetry to {}m since not given.'.format(d_static))
+            self.d = self.check_bathymetry(np.ones((ny,nx))*d_static)
 
 
         # Setting up the wave rays
@@ -97,63 +98,8 @@ class Wave_tracing():
         self.dsigma_dy = np.ma.zeros((nb_wave_rays,nt))
         # make xarray data array of velocity field
 
-        if not type(U) == xa.DataArray:
-            #self.U = xa.DataArray(U)
-            self.U = xa.DataArray(data=U,
-                             dims=['y','x'],
-                             coords=dict(
-                                    x=(['x'], self.x),
-                                    y=(['y'], self.y),
-                                    )
-                            )
-            #self.V = xa.DataArray(V)
-            self.V = xa.DataArray(data=V,
-                             dims=['y','x'],
-                             coords=dict(
-                                    x=(['x'], self.x),
-                                    y=(['y'], self.y),
-                                    )
-                            )
-            if not temporal_evolution:
-                self.U = self.U.expand_dims('time')
-                self.V = self.V.expand_dims('time')
-        else:
-
-            if 'time' in U.dims:
-                self.U = xa.DataArray(data=U.data,
-                                dims=['time','y','x'],
-                                coords=dict(
-                                        time=(['time'],U.time.values),
-                                        x=(['x'], self.x),
-                                        y=(['y'], self.y),
-                                        )
-                                )
-                self.V = xa.DataArray(data=V.data,
-                                dims=['time','y','x'],
-                                coords=dict(
-                                        time=(['time'],V.time.values),
-                                        x=(['x'], self.x),
-                                        y=(['y'], self.y),
-                                        )
-                                )
-            else:
-                self.U = xa.DataArray(data=U,
-                                dims=['y','x'],
-                                coords=dict(
-                                        x=(['x'], self.x),
-                                        y=(['y'], self.y),
-                                        )
-                                )
-                self.V = xa.DataArray(data=V,
-                                dims=['y','x'],
-                                coords=dict(
-                                        x=(['x'], self.x),
-                                        y=(['y'], self.y),
-                                        )
-                                )
-
-                self.U = self.U.expand_dims('time')
-                self.V = self.V.expand_dims('time')
+        self.U = check_velocity_field(U,temporal_evolution,x=self.x,y=self.y)
+        self.V = check_velocity_field(V,temporal_evolution,x=self.x,y=self.y)
 
         # Time
         self.dt = T/nt
@@ -528,8 +474,10 @@ class Wave_tracing():
 
             # THETA
             ray_theta[:,n+1] = np.arctan2(ray_ky[:,n+1],ray_kx[:,n+1])
+            logging.info(ray_theta[:,n+1])
             #keep angles between 0 and 2pi
-            ray_theta[:,n+1] = ray_theta[:,n+1]%(2*np.pi)
+            #ray_theta[:,n+1] = ray_theta[:,n+1]%(2*np.pi)
+            ray_theta[:,n+1] = np.mod(ray_theta[:,n+1],(2*np.pi))
 
 
             counter += 1
@@ -785,6 +733,7 @@ if __name__ == '__main__':
         wt = Wave_tracing(U, V, nx, ny, nt,T,dx,dy, nb_wave_rays=nb_wave_rays,
                             domain_X0=X0, domain_XN=XN,
                             domain_Y0=Y0, domain_YN=YN,
+                            temporal_evolution=True,
                             d=d,DEBUG=False,)
     else:
         wt = Wave_tracing(U, V, nx, ny, nt,T,dx,dy, nb_wave_rays=nb_wave_rays,
