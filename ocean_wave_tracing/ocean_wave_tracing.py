@@ -10,9 +10,9 @@ import json
 from importlib import resources
 
 from .util_solvers import Advection, WaveNumberEvolution, RungeKutta4
-from .util_methods import make_xarray_dataArray, to_xarray_ds, check_velocity_field
+from .util_methods import make_xarray_dataArray, to_xarray_ds, check_velocity_field, check_bathymetry
 #from util_solvers import Advection, WaveNumberEvolution, RungeKutta4
-#from util_methods import make_xarray_dataArray, to_xarray_ds, check_velocity_field
+#from util_methods import make_xarray_dataArray, to_xarray_ds, check_velocity_field, check_bathymetry
 
 
 logger = logging.getLogger(__name__)
@@ -74,11 +74,11 @@ class Wave_tracing():
         self.y = np.linspace(domain_Y0, domain_YN, ny)
 
         if d is not None:
-            self.d = self.check_bathymetry(d)
+            self.d = check_bathymetry(d=d,x=self.x,y=self.y)
         else:
             d_static = 1e5
             logging.info('Hardcoding bathymetry to {}m since not given.'.format(d_static))
-            self.d = self.check_bathymetry(np.ones((ny,nx))*d_static)
+            self.d = check_bathymetry(d=np.ones((ny,nx))*d_static,x=self.x,y=self.y)
 
 
         # Setting up the wave rays
@@ -115,35 +115,6 @@ class Wave_tracing():
 
         self.kwargs = kwargs
 
-    def check_bathymetry(self,d):
-        """ Method checking and fixing bathymetry input
-
-        Args:
-            d (float): 2d bathymetry field
-
-        Returns:
-            d (float): 2d xarray DataArray object
-        """
-        logging.info('bathymetry checker should ideally support xarray ds or da')
-        if np.any(d < 0) and np.any(d > 0):
-            logger.warning('Depth is defined as positive. Thus, negative depth will be treated as Land.')
-            d[d<0] = 0
-
-        if np.any(d < 0):
-            logger.warning('Depth is defined as positive. Hence taking absolute value of input.')
-            d = np.abs(d)
-
-        d[d==0] = np.nan
-
-        if not type(d) == xa.DataArray:
-            d = xa.DataArray(data=d,
-                             dims=['y','x'],
-                             coords=dict(
-                                    x=(['x'], self.x),
-                                    y=(['y'], self.y),
-                                    )
-                            )
-        return(d)
 
     def check_CFL(self, cg, max_speed):
         """ Method for checking the Courant, Friedrichs, and Lewy
@@ -639,7 +610,7 @@ class Wave_tracing():
         return lons, lats
 
 if __name__ == '__main__':
-    test = 'eddy' #lofoten, eddy, zero
+    test = 'zero' #lofoten, eddy, zero
     bathymetry = True
 
     if test=='lofoten':

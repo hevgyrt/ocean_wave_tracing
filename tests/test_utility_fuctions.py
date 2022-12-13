@@ -5,7 +5,7 @@ import pyproj
 import xarray as xa
 
 from ocean_wave_tracing import Wave_tracing
-from ocean_wave_tracing.util_methods import check_velocity_field
+from ocean_wave_tracing.util_methods import check_velocity_field, check_bathymetry
 
 """
 import sys,os
@@ -32,7 +32,7 @@ def domain_vars():
 
     return nx,ny,nt,T,dx,dy,X,Y,X0,XN
 
-def test_check_velocity_field_checker(domain_vars):
+def test_velocity_field_checker(domain_vars):
     nx,ny,nt,T,dx,dy,X,Y,X0,XN  = domain_vars
     U_np = np.zeros((nx,ny))
     V_np = np.zeros((nx,ny))
@@ -62,3 +62,31 @@ def test_check_velocity_field_checker(domain_vars):
     U_xa_wt_out = check_velocity_field(U=U_xa_nt,temporal_evolution=True,x=X,y=Y)
     assert 'time' in U_xa_wt_out.dims
     assert isinstance(U_xa_wt_out,xa.DataArray)
+
+def test_bathymetry_field_checker(domain_vars):
+    nx,ny,nt,T,dx,dy,X,Y,X0,XN  = domain_vars
+
+
+    # 1. zero bathymetry input (all shoud become nan)
+    d = np.zeros((nx,ny))
+    d_none = check_bathymetry(d=d,x=X,y=Y)
+    assert np.isnan(d_none.values).all(), "All values are not nan"
+
+    # 2. only positive input (as is the convention)
+    d_pos = np.ones((nx,ny))*np.random.randint(1,20,size=(nx,ny)) # only positive values
+    d_cb_pos = check_bathymetry(d=d_pos,x=X,y=Y)
+    assert (d_cb_pos>0).all()
+
+    # 3. only negative input (should be flipped to positive)
+    d_neg = np.ones((nx,ny))*np.random.randint(-20,-1,size=(nx,ny))
+    d_cb_neg = check_bathymetry(d=d_neg,x=X,y=Y)
+    assert (d_cb_neg>0).all()
+
+    # 4. negative and positive values. Positive treated as valid, negative as land (i.e. nan)
+    d_pos_neg = np.zeros((nx,ny))
+    d_pos_neg[0:nx//2] = d_pos[0:nx//2]
+    d_pos_neg[nx//2:] = d_neg[nx//2:]
+
+    d_cb_pos_neg = check_bathymetry(d=d_pos_neg,x=X,y=Y)
+    assert (d_cb_pos_neg[0:nx//2]>0).all()
+    assert np.isnan(d_cb_pos_neg[nx//2:]).all()

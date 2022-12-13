@@ -3,6 +3,7 @@ Standalone methods supporting the ocean_wave_tracing solver
 """
 from datetime import datetime
 import xarray as xa
+import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
@@ -69,5 +70,35 @@ def check_velocity_field(U,temporal_evolution,x,y):
         U_out = U_out.expand_dims('time')
 
     assert 'time' in U_out.dims, "Velocity field is missing time dimension."
-    
+
     return U_out
+
+def check_bathymetry(d,x,y):
+    """ Method checking and fixing bathymetry input
+
+    Args:
+        d (float): 2d bathymetry field
+
+    Returns:
+        d (float): 2d xarray DataArray object
+    """
+    logging.info('bathymetry checker should ideally support xarray ds or da')
+    if np.any(d < 0) and np.any(d > 0):
+        logger.warning('Depth is defined as positive. Thus, negative depth will be treated as Land.')
+        d[d<0] = 0
+
+    if np.any(d < 0):
+        logger.warning('Depth is defined as positive. Hence taking absolute value of input.')
+        d = np.abs(d)
+
+    d[d==0] = np.nan
+
+    if not type(d) == xa.DataArray:
+        d = xa.DataArray(data=d,
+                         dims=['y','x'],
+                         coords=dict(
+                                x=(['x'], x),
+                                y=(['y'], y),
+                                )
+                        )
+    return(d)
