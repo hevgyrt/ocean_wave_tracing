@@ -121,7 +121,7 @@ class Wave_tracing():
             condition for numerical intergration
         """
         dt = self.dt
-        DX = np.max([self.dx,self.dy])
+        DX = np.min([self.dx,self.dy])
 
         assert cg>=0, "Group velocity must be positive. Currently {}".format(cg)
         assert max_speed>=0,  "Maximum current speed must be positive. Currently {}".format(max_speed)
