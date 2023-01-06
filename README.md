@@ -4,6 +4,9 @@
 
 A numerical solver of the wave ray equations for ocean waves.
 
+![Demo](https://github.com/hevgyrt/ocean_wave_tracing/blob/main/notebooks/movie_rt_poc.gif)
+
+
 ## Table of contents
 * [General info](#general-info)
 * [Setup](#setup)
