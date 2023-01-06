@@ -26,7 +26,7 @@ class Wave_tracing():
     """
     def __init__(self, U, V,  nx, ny, nt, T, dx, dy,
                  nb_wave_rays, domain_X0, domain_XN, domain_Y0, domain_YN,
-                 temporal_evolution=False, T0=None,
+                 temporal_evolution=False,
                  d=None,DEBUG=False,**kwargs):
         """
         Args:
@@ -45,7 +45,6 @@ class Wave_tracing():
 
 
             temporal_evolution (bool): flag if velocity field should change in time
-            T0 (int): Initial time if temporal_evolution==True
             d (float): 2D bathymetry field
             **kwargs
         """
