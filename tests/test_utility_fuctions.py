@@ -7,14 +7,6 @@ import xarray as xa
 from ocean_wave_tracing import Wave_tracing
 from ocean_wave_tracing.util_methods import check_velocity_field, check_bathymetry
 
-"""
-import sys,os
-testdir = os.path.dirname(os.getcwd() + '/')
-srcdir = '..'
-sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
-print(os.path.abspath(os.path.join(testdir, srcdir)))
-#from util_methods import check_velocity_field
-"""
 @pytest.fixture
 def domain_vars():
     nx = 20
@@ -62,6 +54,17 @@ def test_velocity_field_checker(domain_vars):
     U_xa_wt_out = check_velocity_field(U=U_xa_nt,temporal_evolution=True,x=X,y=Y)
     assert 'time' in U_xa_wt_out.dims
     assert isinstance(U_xa_wt_out,xa.DataArray)
+
+    # 3. velocity field from idealized input
+    ncin = xa.open_dataset('notebooks/idealized_input.nc')
+
+    U_ncin_nt_out = check_velocity_field(U=ncin.U_jet,temporal_evolution=False,x=ncin.x,y=ncin.y)
+    assert 'time' in U_ncin_nt_out.dims
+    assert isinstance(U_ncin_nt_out,xa.DataArray)
+
+    U_ncin_wt_out = check_velocity_field(U=ncin.U_jet,temporal_evolution=True,x=ncin.x,y=ncin.y)
+    assert 'time' in U_ncin_wt_out.dims
+    assert isinstance(U_ncin_wt_out,xa.DataArray)
 
 def test_bathymetry_field_checker(domain_vars):
     nx,ny,nt,T,dx,dy,X,Y,X0,XN  = domain_vars

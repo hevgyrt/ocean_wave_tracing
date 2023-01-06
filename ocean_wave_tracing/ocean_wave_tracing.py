@@ -672,11 +672,11 @@ if __name__ == '__main__':
         nx = len(X)
         ny = len(Y)
         dx=dy=X[1]-X[0]
-        nb_wave_rays = 200#550#nx
-        T = 1000
+        nb_wave_rays = 50#550#nx
+        T = 1800
         print("T={}h".format(T/3600))
-        nt = 300
-        wave_period = 20
+        nt = 150
+        wave_period = 8
         X0, XN = X[0], X[-1]
         Y0, YN = Y[0], Y[-1]
 
@@ -689,7 +689,7 @@ if __name__ == '__main__':
 
     i_w_side = 'left'#'top'
     if i_w_side == 'left':
-        theta0 = 0.12 #Initial wave propagation direction
+        theta0 = 0 #Initial wave propagation direction
         #theta0 = np.linspace(0,np.pi,nb_wave_rays) #Initial wave propagation direction
     elif i_w_side == 'top':
         theta0 = 1.5*np.pi#0#np.pi/8 #Initial wave propagation direction
@@ -731,11 +731,11 @@ if __name__ == '__main__':
         pc=ax.pcolormesh(wt.x,wt.y,vorticity[0,:,:],shading='auto',cmap='bwr',
                          vmin=-0.0004,vmax=0.0004)
     elif test=='zero' and bathymetry:
-        pc=ax.contourf(wt.x,wt.y,-d,shading='auto',cmap='viridis',levels=25)
+        pc=ax.contourf(wt.x,wt.y,-d,shading='auto',cmap=cm.deep,levels=25)
 
     ax.plot(wt.ray_x[:,0],wt.ray_y[:,0],'o')
-    step=2
-    for i in range(0,wt.nb_wave_rays,step):
+
+    for i in range(0,wt.nb_wave_rays):
         ax.plot(wt.ray_x[i,:],wt.ray_y[i,:],'-k')
 
     idts = np.arange(0,nt,40)
@@ -763,8 +763,8 @@ if __name__ == '__main__':
 
     plot_single_ray = True
     if plot_single_ray:
-        ray_id = 105
-        idts = np.arange(100,300,70)
+        ray_id = 25
+        idts = np.arange(100,130,70)
         fig3,ax3 = plt.subplots(nrows=4,ncols=1,figsize=(16,10),gridspec_kw={'height_ratios': [3, 1,1,1]})
 
         pc=ax3[0].contourf(wt.x,wt.y,-wt.d,shading='auto',cmap=cm.deep,levels=25)
