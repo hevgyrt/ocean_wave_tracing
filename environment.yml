@@ -14,3 +14,4 @@ dependencies:
   - yaml
   - ipython
   - cmocean
+  - jupyterlab
