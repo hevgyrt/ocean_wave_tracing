@@ -16,6 +16,11 @@ This project provides a numerical solver of the wave ray equations for ocean wav
 
 	
 ## Setup
-To run this project, install it locally using:
+To run this project, install it locally using conda (or [mamba](https://anaconda.org/conda-forge/mamba) as used here):
+```
 $ mamba env create -f environment.yml
 $ conda activate wave_tracing
+```
+
+## Usage
+A number of examples on how to run the solver are given in the [notebooks](notebooks) folder.
