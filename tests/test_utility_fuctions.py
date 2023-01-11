@@ -47,11 +47,11 @@ def test_velocity_field_checker(domain_vars):
                         )
             )
 
-    U_xa_nt_out = check_velocity_field(U=U_xa_nt,temporal_evolution=False,x=X,y=Y)
+    U_xa_nt_out = check_velocity_field(U=U_xa_nt.rename({'range':'x','azimuth':'y'}),temporal_evolution=False,x=X,y=Y)
     assert 'time' in U_xa_nt_out.dims
     assert isinstance(U_xa_nt_out,xa.DataArray)
 
-    U_xa_wt_out = check_velocity_field(U=U_xa_nt,temporal_evolution=True,x=X,y=Y)
+    U_xa_wt_out = check_velocity_field(U=U_xa_nt.rename({'range':'x','azimuth':'y'}),temporal_evolution=True,x=X,y=Y)
     assert 'time' in U_xa_wt_out.dims
     assert isinstance(U_xa_wt_out,xa.DataArray)
 

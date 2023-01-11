@@ -63,12 +63,12 @@ def check_velocity_field(U,temporal_evolution,x,y):
                         )
     else:
         # Check dimensions
-        U_out = U
         if 'time' in U.dims:
             time_flag = True
 
-        assert 'x' in U_out.dims, "Velocity field is using wrong x-dimension. Please rename by U.rename({'XDIM':'x'})"
-        assert 'y' in U_out.dims, "Velocity field is using wrong y-dimension. Please rename by U.rename({'YDIM':'y'})"
+        assert 'x' in U.dims, "Velocity field is using wrong x-dimension. Please rename by U.rename({'XDIM':'x'})"
+        assert 'y' in U.dims, "Velocity field is using wrong y-dimension. Please rename by U.rename({'YDIM':'y'})"
+        U_out = U
 
     if not time_flag:
         U_out = U_out.expand_dims('time')
