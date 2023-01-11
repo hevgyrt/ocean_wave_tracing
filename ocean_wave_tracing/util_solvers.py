@@ -33,6 +33,7 @@ class WaveNumberEvolution():
 
 class ODESolver(object):
     """
+    Based on the work by Langtangen, H.P. DOI = 10.1007/978-3-662-49887-3.
     Superclass for numerical methods solving scalar and vector ODEs
       du/dt = f(u, t)
     Attributes:
@@ -60,21 +61,13 @@ class ODESolver(object):
 class ForwardEuler(ODESolver):
     def advance(u, f, k, t):
         dt = t[k+1] - t[k]
-        #print(f(u,t[k]))
         u_new = u + dt*f(u, t[k])
-        #u_new = u + dt*f
         return u_new
 
 class RungeKutta4(ODESolver):
-    #def advance(self,u, f, k, t):
     def advance(u, f, k, t):
         dt = t[k+1] - t[k]
         dt2 = dt/2.0
-        #K1 = dt*f(u[k], t[k])
-        #K2 = dt*f(u[k] + 0.5*K1, t[k] + dt2)
-        #K3 = dt*f(u[k] + 0.5*K2, t[k] + dt2)
-        #K4 = dt*f(u[k] + K3, t[k] + dt)
-        #u_new = u[k] + (1/6.0)*(K1 + 2*K2 + 2*K3 + K4)
         K1 = dt*f(u, t[k])
         K2 = dt*f(u + 0.5*K1, t[k] + dt2)
         K3 = dt*f(u + 0.5*K2, t[k] + dt2)
