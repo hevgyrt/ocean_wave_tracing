@@ -23,4 +23,44 @@ $ conda activate wave_tracing
 ```
 
 ## Usage
-A number of examples on how to run the solver are given in the [notebooks](notebooks) folder.
+Here is a simple use case on how to run the solver:
+```
+import numpy as np
+import matplotlib.pyplot as plt
+from ocean_wave_tracing.ocean_wave_tracing import Wave_tracing
+
+# Defining some properties of the medium
+nx = 100; ny = 100 # number of grid points in x- and y-direction
+x = np.linspace(0,2000,nx) # size x-domain [m]
+y = np.linspace(0,3500,ny) # size y-domain [m]
+T = 250 # simulation time [s]
+U=np.zeros((nx,ny))
+U[nx//2:,:]=1
+
+# Define a wave tracing object
+wt = Wave_tracing(U=U,V=np.zeros((ny,nx)),
+                       nx=nx, ny=ny, nt=150,T=T,
+                       dx=x[1]-x[0],dy=y[1]-y[0],
+                       nb_wave_rays=20,
+                       domain_X0=x[0], domain_XN=x[-1],
+                       domain_Y0=y[0], domain_YN=y[-1],
+                       )
+
+# Set initial conditions
+wt.set_initial_condition(wave_period=10,
+                              theta0=np.pi/8)
+# Solve
+wt.solve()
+
+# Plot
+fig, ax = plt.subplots();
+pc=ax.pcolormesh(wt.x,wt.y,wt.U.isel(time=0),shading='auto');
+fig.colorbar(pc)
+
+for ray_id in range(wt.nb_wave_rays):
+    ax.plot(wt.ray_x[ray_id,:],wt.ray_y[ray_id,:],'-k')
+
+plt.show()
+```
+
+Additional examples are given in the [notebooks](notebooks) folder in the repository.
