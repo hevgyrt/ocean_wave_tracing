@@ -1,6 +1,6 @@
 # ocean_wave_tracing
 
-** NOTE: this module is currently under development, and therefore not all parts of the code will be working as expected.
+** NOTE: this module is currently under development, and therefore parts of the code may not be working as expected.
 
 A numerical solver of the wave ray equations for ocean waves.
 
