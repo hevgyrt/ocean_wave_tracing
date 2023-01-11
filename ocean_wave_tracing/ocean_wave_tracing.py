@@ -42,8 +42,6 @@ class Wave_tracing():
                                 equal or less to either nx or ny.
             domain_*0 (float): start value of domain area in X and Y direction
             domain_*N (float): end value of domain area in X and Y direction
-
-
             temporal_evolution (bool): flag if velocity field should change in time
             d (float): 2D bathymetry field
             **kwargs
