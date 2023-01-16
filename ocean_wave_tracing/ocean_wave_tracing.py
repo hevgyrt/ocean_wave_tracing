@@ -38,8 +38,7 @@ class Wave_tracing():
             T (int): Seconds. Duration of wave tracing
             dx (int): Spatial resolution in x-direction. Units conforming to U
             dy (int): Spatial resolution in y-direction. Units conforming to V
-            nb_wave_rays (int): Number of wave rays to track. NOTE: Should be
-                                equal or less to either nx or ny.
+            nb_wave_rays (int): Number of wave rays to track.
             domain_*0 (float): start value of domain area in X and Y direction
             domain_*N (float): end value of domain area in X and Y direction
             temporal_evolution (bool): flag if velocity field should change in time
@@ -74,7 +73,7 @@ class Wave_tracing():
             self.d = check_bathymetry(d=d,x=self.x,y=self.y)
         else:
             d_static = 1e5
-            logging.info('Hardcoding bathymetry to {}m since not given.'.format(d_static))
+            logging.info(f'Hardcoding bathymetry to {d_static}m since not given.')
             self.d = check_bathymetry(d=np.ones((ny,nx))*d_static,x=self.x,y=self.y)
 
 
