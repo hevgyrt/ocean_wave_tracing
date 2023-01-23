@@ -441,7 +441,7 @@ class Wave_tracing():
 
             # THETA
             ray_theta[:,n+1] = np.arctan2(ray_ky[:,n+1],ray_kx[:,n+1])
-            logging.info(ray_theta[:,n+1])
+            #logging.info(ray_theta[:,n+1])
             #keep angles between 0 and 2pi
             #ray_theta[:,n+1] = ray_theta[:,n+1]%(2*np.pi)
             ray_theta[:,n+1] = np.mod(ray_theta[:,n+1],(2*np.pi))
