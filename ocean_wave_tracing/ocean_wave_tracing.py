@@ -11,8 +11,6 @@ from importlib import resources
 
 from .util_solvers import Advection, WaveNumberEvolution, RungeKutta4
 from .util_methods import make_xarray_dataArray, to_xarray_ds, check_velocity_field, check_bathymetry
-#from util_solvers import Advection, WaveNumberEvolution, RungeKutta4
-#from util_methods import make_xarray_dataArray, to_xarray_ds, check_velocity_field, check_bathymetry
 
 
 logger = logging.getLogger(__name__)
@@ -59,7 +57,6 @@ class Wave_tracing():
         self.domain_XN = domain_XN # right side
         self.domain_Y0 = domain_Y0 # bottom
         self.domain_YN = domain_YN # top
-        #self.i_w_side = incoming_wave_side
         self.T = T
 
         self.temporal_evolution = temporal_evolution
@@ -69,6 +66,7 @@ class Wave_tracing():
         self.x = np.linspace(domain_X0, domain_XN, nx)
         self.y = np.linspace(domain_Y0, domain_YN, ny)
 
+        # Check the bathymetry
         if d is not None:
             self.d = check_bathymetry(d=d,x=self.x,y=self.y)
         else:
@@ -84,7 +82,7 @@ class Wave_tracing():
         self.ray_ky = np.zeros((nb_wave_rays,nt))
         self.ray_k = np.zeros((nb_wave_rays,nt))
         self.ray_theta = np.ma.zeros((nb_wave_rays,nt))
-        self.ray_cg = np.ma.zeros((nb_wave_rays,nt)) #intrinsic group velocity
+        self.ray_cg = np.ma.zeros((nb_wave_rays,nt)) # intrinsic group velocity
         self.ray_U = np.ma.zeros((nb_wave_rays,nt)) # U component closest to ray
         self.ray_V = np.ma.zeros((nb_wave_rays,nt)) # V component closest to ray
         self.ray_depth = np.zeros((nb_wave_rays,nt))
@@ -92,8 +90,8 @@ class Wave_tracing():
         # bathymetry gradient
         self.dsigma_dx = np.ma.zeros((nb_wave_rays,nt))
         self.dsigma_dy = np.ma.zeros((nb_wave_rays,nt))
-        # make xarray data array of velocity field
-
+        
+        # make xarray DataArray of velocity field
         self.U = check_velocity_field(U,temporal_evolution,x=self.x,y=self.y)
         self.V = check_velocity_field(V,temporal_evolution,x=self.x,y=self.y)
 
@@ -135,22 +133,23 @@ class Wave_tracing():
 
 
     def find_nearest(self,array, value):
-        """ Method for finding neares indicies to value in array
+        """ Method finding nearest indices to a position in array
 
         Args:
-            array: Array containg values to be compared
+            array: Array containg to be compared with the value
             value (float): value to which index in array should be found
 
         Returns:
-            idx (int): Index of array value closest to value
+            idx (int): Index of the array which is closest to the value
         """
+
         array = np.asarray(array)
         idx = (np.abs(array - value)).argmin()
         return idx
 
 
     def c_intrinsic(self,k,d,group_velocity=False):
-        """ Method computing intrinsic wave phase and group velocity according
+        """ Computing the intrinsic wave phase and group velocity according
         to the general dispersion relation
 
         Args:
@@ -180,7 +179,7 @@ class Wave_tracing():
             return c_in
 
     def sigma(self,k,d):
-        """ frequency dispersion relation
+        """ Intrinsic frequency dispersion relation
 
         Args:
             k (float): Wave number
@@ -195,6 +194,9 @@ class Wave_tracing():
         return sigma
 
     def dsigma(self,k,idxs,idys,dx, direction):
+        """ Compute the horizontal gradient in sigma due to
+        the bathymetry using a central difference scheme.
+        """
 
         # Fixing indices outside domain
         idxs[idxs<1] = 1
@@ -206,11 +208,9 @@ class Wave_tracing():
         if direction == 'x':
             ray_depth_last = self.d.isel(y=xa.DataArray(idys,dims='z'),x=xa.DataArray(idxs-1,dims='z'))
             ray_depth_next = self.d.isel(y=xa.DataArray(idys,dims='z'),x=xa.DataArray(idxs+1,dims='z'))
-            #dsigma = (1/(2*dx)) * (self.sigma(k,self.d[idys,idxs+1]) - self.sigma(k,self.d[idys,idxs-1]))
         elif direction == 'y':
             ray_depth_last = self.d.isel(y=xa.DataArray(idys-1,dims='z'),x=xa.DataArray(idxs,dims='z'))
             ray_depth_next = self.d.isel(y=xa.DataArray(idys+1,dims='z'),x=xa.DataArray(idxs,dims='z'))
-            #dsigma = (1/(2*dx)) * (self.sigma(k,self.d[idys+1,idxs]) - self.sigma(k,self.d[idys-1,idxs]))
 
         dsigma = (1/(2*dx)) * (self.sigma(k,ray_depth_next) - self.sigma(k,ray_depth_last))
 
@@ -218,7 +218,7 @@ class Wave_tracing():
 
 
     def wave(self,T,theta,d):
-        """ Method computing generic wave properties
+        """ Method computing wave number from initial wave period
 
         Args:
             T (float): Wave period
@@ -436,7 +436,7 @@ class Wave_tracing():
                                                dUkx=dudy[velocity_idt[n],idys,idxs], dUky=dvdy[velocity_idt[n],idys,idxs])
             ray_ky[:,n+1] = solver.advance(u=ray_ky[:,n], f=f_wave_nb, k=n, t=t)# NOTE: this k is a counter and not wave number
 
-            # Compute k
+            # Compute wave number k
             ray_k[:,n+1] = np.sqrt(ray_kx[:,n+1]**2+ray_ky[:,n+1]**2)
 
             # THETA
@@ -495,7 +495,6 @@ class Wave_tracing():
                     ax3[0].set_xlim([self.x[0],self.x[-1]])
                     ax3[0].set_ylim([self.y[0],self.y[-1]])
                     fig3.tight_layout()
-                    #fig3.savefig('/home/trygveh/documents/phd/papers/wave_ray_tracing/figures/POC.png',dpi=170)
                     #plt.show()
 
 
@@ -513,6 +512,7 @@ class Wave_tracing():
         logging.info('Stoppet at time idt: {}'.format(velocity_idt[n]))
 
     def to_ds(self,**kwargs):
+        """Convert wave ray information to xarray object"""
 
         if 'proj4' in kwargs:
             lons,lats = self.to_latlon(kwargs['proj4'])
