@@ -3,8 +3,6 @@
 ![ci](https://github.com/hevgyrt/ocean_wave_tracing/actions/workflows/python.yml/badge.svg)
 [![DOI](https://zenodo.org/badge/362749576.svg)](https://zenodo.org/badge/latestdoi/362749576)
 
-** NOTE: this module is currently under development, and therefore parts of the code may not be working as expected.
-
 A numerical solver of the wave ray equations for ocean waves.
 
 ![Demo](https://github.com/hevgyrt/ocean_wave_tracing/blob/main/notebooks/movie_rt_poc.gif)
