@@ -1,6 +1,7 @@
 # ocean_wave_tracing
 
-** NOTE: this module is currently under development, and therefore not all parts of the code will be working as expected.
+![ci](https://github.com/hevgyrt/ocean_wave_tracing/actions/workflows/python.yml/badge.svg)
+[![DOI](https://zenodo.org/badge/362749576.svg)](https://zenodo.org/badge/latestdoi/362749576)
 
 A numerical solver of the wave ray equations for ocean waves.
 
@@ -15,7 +16,7 @@ A numerical solver of the wave ray equations for ocean waves.
 ## General info
 This project provides a numerical solver of the wave ray equations for ocean waves subject to ambient currents at arbitrary depths.
 
-	
+
 ## Setup
 To run this project, install it locally using conda (or [mamba](https://anaconda.org/conda-forge/mamba) as used here):
 ```
