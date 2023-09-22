@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "ocean_wave_tracing"
-version = "0.2.0"
+version = "1.0.2"
 description = "Ocean wave tracing"
-authors = ["Tryge "]
+authors = ["Trygve Halsne <trygveh@met.no>"]
 license = "GPLv2"
 
 [tool.poetry.scripts]
