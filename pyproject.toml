@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ocean_wave_tracing"
-version = "1.0.2"
+version = "1.0.3"
 description = "Ocean wave tracing"
 authors = ["Trygve Halsne <trygveh@met.no>"]
 license = "GPLv2"
