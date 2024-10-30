@@ -20,8 +20,8 @@ jobs:
         os: ["ubuntu", "macos", "windows"]
         python-version: [ '3.8', '3.9', '3.10', '3.11' ]
     steps:
-      - uses: actions/checkout@v2
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: environment.yml
           python-version: ${{ matrix.python-version }}
