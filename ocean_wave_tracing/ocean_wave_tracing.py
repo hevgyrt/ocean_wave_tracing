@@ -374,18 +374,11 @@ class Wave_tracing():
         V = self.V.data
 
         #Compute velocity gradients
-        logger.info('Assuming uniform horizontal resolution in each direction')
-        if self.nb_velocity_time_steps>1:
-            dudy, dudx = np.gradient(U,dx)[1:3]
-            dvdy, dvdx = np.gradient(V,dy)[1:3]
-        else:
-            dudy, dudx = np.gradient(U[0,:,:],dx)
-            dvdy, dvdx = np.gradient(V[0,:,:],dy)
+        dudx = self.U.differentiate('x')
+        dudy = self.U.differentiate('y')
+        dvdx = self.V.differentiate('x')
+        dvdy = self.V.differentiate('y')
 
-            dudy = np.expand_dims(dudy,axis=0)
-            dudx = np.expand_dims(dudx,axis=0)
-            dvdy = np.expand_dims(dvdy,axis=0)
-            dvdx = np.expand_dims(dvdx,axis=0)
 
         x = self.x
         y = self.y
@@ -429,11 +422,15 @@ class Wave_tracing():
             self.dsigma_dy[:,n+1] = self.dsigma(ray_k[:,n], idxs, idys, self.dx,direction='y')
 
             f_wave_nb = WaveNumberEvolution(d_sigma=self.dsigma_dx[:,n+1], kx=ray_kx[:,n], ky=ray_ky[:,n],
-                                               dUkx=dudx[velocity_idt[n],idys,idxs], dUky=dvdx[velocity_idt[n],idys,idxs])
+                                               #dUkx=dudx[velocity_idt[n],idys,idxs], dUky=dvdx[velocity_idt[n],idys,idxs])
+                                               dUkx=dudx.isel(time=velocity_idt[n], y=xa.DataArray(idys,dims='z'),x=xa.DataArray(idxs,dims='z')), 
+                                               dUky=dvdx.isel(time=velocity_idt[n], y=xa.DataArray(idys,dims='z'),x=xa.DataArray(idxs,dims='z')))
             ray_kx[:,n+1] = solver.advance(u=ray_kx[:,n], f=f_wave_nb,k=n, t=t)# NOTE: this k is a counter and not wave number
 
             f_wave_nb = WaveNumberEvolution(d_sigma=self.dsigma_dy[:,n+1], kx=ray_kx[:,n], ky=ray_ky[:,n],
-                                               dUkx=dudy[velocity_idt[n],idys,idxs], dUky=dvdy[velocity_idt[n],idys,idxs])
+                                               #dUkx=dudy[velocity_idt[n],idys,idxs], dUky=dvdy[velocity_idt[n],idys,idxs])
+                                               dUkx=dudy.isel(time=velocity_idt[n], y=xa.DataArray(idys,dims='z'),x=xa.DataArray(idxs,dims='z')), 
+                                               dUky=dvdy.isel(time=velocity_idt[n], y=xa.DataArray(idys,dims='z'),x=xa.DataArray(idxs,dims='z')))
             ray_ky[:,n+1] = solver.advance(u=ray_ky[:,n], f=f_wave_nb, k=n, t=t)# NOTE: this k is a counter and not wave number
 
             # Compute wave number k
