@@ -59,5 +59,25 @@
         "long_name": "longitude",
         "standard_name": "longitude",
         "units": "degrees_east"
+    },
+    "ray_dudx": {
+        "long_name": "dudx, current gradient",
+        "standard_name": "N/A",
+        "units": "s-1"
+    },
+    "ray_dvdy": {
+        "long_name": "dvdy, current gradient",
+        "standard_name": "N/A",
+        "units": "s-1"
+    },
+    "ray_dudy": {
+        "long_name": "Negative part of the vertical vorticity component.",
+        "standard_name": "ocean_relative_vorticity",
+        "units": "s-1"
+    },
+    "ray_dvdx": {
+        "long_name": "Positive part of the vertical vorticity component.",
+        "standard_name": "ocean_relative_vorticity",
+        "units": "s-1"
     }
 }
