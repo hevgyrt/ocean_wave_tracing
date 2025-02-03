@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import logging
 import xarray as xa
-import pyproj
+import pyproj # type: ignore
 import sys
 import cmocean.cm as cm
 from netCDF4 import Dataset
@@ -504,14 +504,8 @@ class Wave_tracing():
                     for id in wr_id:
                         ax3[0].plot(self.ray_x[id,:n+1],self.ray_y[id,:n+1],'-k')
 
-                    ax3[0].plot(wt.ray_x[wr_id[2],idts],wt.ray_y[wr_id[2],idts],marker='s',ms=7,color='tab:red',linestyle='none')
 
                     ax3[0].xaxis.tick_top()
-
-                    ax3[1].plot(-wt.ray_depth[wr_id[2],:1090], label=r'$d(x_r,y_r)$')
-                    ax3[2].plot(wt.ray_kx[wr_id[2],:1090], label=r'$k_x$')
-                    ax3[2].plot(wt.ray_ky[wr_id[2],:1090], label=r'$k_y$',c='tab:green')
-                    ax3[3].plot(wt.ray_theta[wr_id[2],:1090], label=r'$\theta$')
 
                     ax3[2].sharex(ax3[1])
                     ax3[3].sharex(ax3[1])

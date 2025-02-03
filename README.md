@@ -7,7 +7,6 @@ A numerical solver of the wave ray equations for ocean waves.
 
 ![Demo](https://github.com/hevgyrt/ocean_wave_tracing/blob/main/notebooks/movie_rt_poc.gif)
 
-
 ## Table of contents
 * [General info](#general-info)
 * [Setup](#setup)
@@ -16,6 +15,7 @@ A numerical solver of the wave ray equations for ocean waves.
 ## General info
 This project provides a numerical solver of the wave ray equations for ocean waves subject to ambient currents at arbitrary depths.
 
+The solver has been documented and peer-reviewed in [Halsne et al. 2023](https://doi.org/10.5194/gmd-16-6515-2023), which should be cited when the tool is used.
 
 ## Setup
 To run this project, install it locally using conda (or [mamba](https://anaconda.org/conda-forge/mamba) as used here):
