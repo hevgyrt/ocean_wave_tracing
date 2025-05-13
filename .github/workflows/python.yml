@@ -35,7 +35,7 @@ jobs:
       - name: Build wheels
         run: |
           conda activate test
-          mamba install -c conda-forge poetry
+          conda install -c conda-forge poetry
           poetry build
 
       - name: Upload wheels
