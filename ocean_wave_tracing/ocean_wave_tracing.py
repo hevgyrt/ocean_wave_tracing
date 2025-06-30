@@ -659,3 +659,11 @@ class Wave_tracing():
         else:
             return ray_curvature_tot
 
+    def get_shoaling_coefficient(self):
+        """ Compute the shoaling coefficient due to group velocity changes
+        """
+        ds_ray = self.to_ds()
+        sc=np.sqrt(ds_ray.ray_cg[:,0]/ds_ray.ray_cg)
+        sc.attrs['units']='-'
+        sc.attrs['long_name']='Shoaling coefficient'
+        return sc

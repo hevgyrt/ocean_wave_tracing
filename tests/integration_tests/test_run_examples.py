@@ -41,7 +41,8 @@ def params():
 
 @pytest.mark.slow
 def test_linear_bathymetry_using_forward_euler(params,plot=False):
-    # Here, we expect rays to deflect against shallower waters
+    # Rays turn against shallower waters
+    # Starting from "left", the rays become convecs and hence has a positive curvature
     ncin = xa.open_dataset('notebooks/idealized_input.nc')
     X = params.get('X')
     Y = params.get('Y')
@@ -55,8 +56,15 @@ def test_linear_bathymetry_using_forward_euler(params,plot=False):
                       temporal_evolution=True, d=ncin.bathymetry_1dy_slope.data)
 
     wt.set_initial_condition(wave_period=8,theta0=0,incoming_wave_side='left')
-
     wt.solve(solver=ForwardEuler)
+
+    curv = wt.get_ray_curvature()
+
+    # select the curvature of interest (coi); the middle ray to ensure it is positive 
+    # halfway throughout the domain
+    coi = curv.isel(ray_id=wt.nb_wave_rays//2,time=wt.nt//2).values
+    assert coi > 0
+
     if plot:
         fig,ax = plt.subplots(figsize=(16,6))
         pc=ax.contourf(wt.x,wt.y,-wt.d,shading='auto',cmap=cm.deep,levels=25)
