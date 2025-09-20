@@ -78,6 +78,12 @@ class Wave_tracing():
         # Computing the horizontal gradients of the bathymetry
         self.dddx = self.d.differentiate(coord='x',edge_order=2)
         self.dddy = self.d.differentiate(coord='y',edge_order=2)
+        
+        # Computing the Hessian of the bathymetry
+        self.ddd2x = self.dddx.differentiate(coord='x',edge_order=2)
+        self.ddd2y = self.dddy.differentiate(coord='y',edge_order=2)
+        self.ddd2xy = self.dddx.differentiate(coord='y',edge_order=2)
+
 
         # Setting up the wave rays
         self.ray_x = np.zeros((nb_wave_rays,nt))
@@ -95,6 +101,12 @@ class Wave_tracing():
         self.ray_dvdx = np.ma.zeros((nb_wave_rays,nt)) 
         self.ray_depth = np.zeros((nb_wave_rays,nt))
 
+        # wave rays for double derivatives
+        self.ray_dvdx_2 = np.ma.zeros((nb_wave_rays,nt)) 
+        self.ray_dudy_2 = np.ma.zeros((nb_wave_rays,nt)) 
+        self.ray_du2_dxdy = np.ma.zeros((nb_wave_rays,nt)) 
+        self.ray_dv2_dxdy = np.ma.zeros((nb_wave_rays,nt)) 
+
         # along-ray bathymetry gradient
         self.dsigma_dx = np.ma.zeros((nb_wave_rays,nt))
         self.dsigma_dy = np.ma.zeros((nb_wave_rays,nt))
@@ -102,6 +114,11 @@ class Wave_tracing():
         # along-ray phase velocity gradient
         self.d_cy = np.ma.zeros((nb_wave_rays,nt))
         self.d_cx = np.ma.zeros((nb_wave_rays,nt))
+        
+        # along-ray double derivative of phase velocities
+        self.dd_cyy = np.ma.zeros((nb_wave_rays,nt))
+        self.dd_cxx = np.ma.zeros((nb_wave_rays,nt))
+        self.dd_cxy = np.ma.zeros((nb_wave_rays,nt))
         
         # make xarray DataArray of velocity field
         self.U = check_velocity_field(U,temporal_evolution,x=self.x,y=self.y)
@@ -243,6 +260,60 @@ class Wave_tracing():
         nabla_c = 0.5*np.sqrt((self.g*k) / np.tanh(kd)) * (1-(np.tanh(kd))**2) *nabla_d_rays
         return nabla_c
 
+    def c_xx(self,k,idxs,idys,ray_depths):
+        """ Compute the double derivative of the phase speed in x-direction 
+        """
+        kd = k*ray_depths
+        T = np.tanh(kd)
+        alpha =  0.5*np.sqrt(self.g*k)
+
+        C = ( (-2*T*k*(1-T**2)*np.sqrt(T)) - (k/np.sqrt(T))*(1-T**2)*(1-T**2) ) / T
+        D = (1-T**2)/np.sqrt(T)
+
+        nabla_d_rays = self.dddx.values[idys,idxs]
+        nabla_d_2_rays = self.ddd2x.values[idys,idxs]
+
+        cxx = alpha*C*(nabla_d_rays)**2 + alpha * D * nabla_d_2_rays
+        
+        #nabla_c = 0.5*np.sqrt((self.g*k) / np.tanh(kd)) * (1-(np.tanh(kd))**2) *nabla_d_rays
+        return cxx
+ 
+    def c_yy(self,k,idxs,idys,ray_depths):
+        """ Compute the double derivative of the phase speed in y-direction 
+        """
+        kd = k*ray_depths
+        T = np.tanh(kd)
+        alpha =  0.5*np.sqrt(self.g*k)
+
+        C = ( (-2*T*k*(1-T**2)*np.sqrt(T)) - (k/np.sqrt(T))*(1-T**2)*(1-T**2) ) / T
+        D = (1-T**2)/np.sqrt(T)
+
+        nabla_d_rays = self.dddy.values[idys,idxs]
+        nabla_d_2_rays = self.ddd2y.values[idys,idxs]
+
+        cyy = alpha*C*(nabla_d_rays)**2 + alpha * D * nabla_d_2_rays
+        
+        #nabla_c = 0.5*np.sqrt((self.g*k) / np.tanh(kd)) * (1-(np.tanh(kd))**2) *nabla_d_rays
+        return cyy
+
+    def c_xy(self,k,idxs,idys,ray_depths):
+        """ Compute the double cross derivative of the phase speed in xy-direction 
+        """
+        
+        kd = k*ray_depths
+        T = np.tanh(kd)
+        alpha =  0.5*np.sqrt(self.g*k)
+
+        C = ( (-2*T*k*(1-T**2)*np.sqrt(T)) - (k/np.sqrt(T))*(1-T**2)*(1-T**2) ) / T
+        D = (1-T**2)/np.sqrt(T)
+
+        nabla_d_rays_x = self.dddx.values[idys,idxs]
+        nabla_d_rays_y = self.dddy.values[idys,idxs]
+        nabla_d_2_rays = self.ddd2xy.values[idys,idxs]
+
+        cxy = alpha*C*(nabla_d_rays_x*nabla_d_rays_y) + alpha * D * nabla_d_2_rays
+        
+        return cxy
 
     def wave(self,T,theta,d):
         """ Method computing wave number from initial wave period.
@@ -412,6 +483,12 @@ class Wave_tracing():
         dvdx = self.V.differentiate('x')
         dvdy = self.V.differentiate('y')
 
+        # Compute the double derivatives for some of the velocities
+        dv_dx_2 = dvdx.differentiate('x')
+        du_dxdy_2 = dudx.differentiate('y')
+        dv_dxdy_2 = dvdx.differentiate('y')
+        du_dy_2 = dudy.differentiate('y')
+
         x = self.x
         y = self.y
         dt = self.dt
@@ -443,6 +520,14 @@ class Wave_tracing():
             
             self.d_cx[:,n] = self.grad_c_x(ray_k[:,n], idxs, idys, ray_depth)
             self.d_cy[:,n] = self.grad_c_y(ray_k[:,n], idxs, idys, ray_depth)
+
+            self.dd_cxx[:,n] = self.c_xx(ray_k[:,n], idxs, idys, ray_depth)
+            self.dd_cyy[:,n] = self.c_yy(ray_k[:,n], idxs, idys, ray_depth)
+            self.dd_cxy[:,n] = self.c_xy(ray_k[:,n], idxs, idys, ray_depth)
+            self.ray_dvdx_2[:,n] = dv_dx_2.values[velocity_idt[n], idys, idxs]
+            self.ray_dudy_2[:,n] = du_dy_2.values[velocity_idt[n], idys, idxs]
+            self.ray_du2_dxdy[:,n] = du_dxdy_2.values[velocity_idt[n], idys, idxs]
+            self.ray_dv2_dxdy[:,n] = dv_dxdy_2.values[velocity_idt[n], idys, idxs]
 
             #======================================================
             ### numerical integration of the wave ray equations ###
