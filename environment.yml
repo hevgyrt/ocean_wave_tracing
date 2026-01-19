@@ -16,3 +16,4 @@ dependencies:
   - cmocean
   - jupyterlab
   - pytest
+  - importlib_resources
