@@ -76,7 +76,7 @@ def test_wave_properties(my_wave):
     theta0 = 0
     wave_period = 5
 
-    k0, kx0, ky0 = my_wave.wave(wave_period, theta0,my_wave.d[0,0])
+    k0, kx0, ky0 = my_wave.wave(wave_period, theta0,my_wave.d[0,0].values)
 
     k_approx = (2*np.pi)/(1.56*wave_period**2)
 
