@@ -274,7 +274,7 @@ class Wave_tracing():
             return (np.sqrt((g*kk * np.tanh(kk*d)))) - (2*np.pi)/T
         
         
-        k = fsolve(k_imp,k_approx)
+        k = fsolve(k_imp,k_approx)[0]
 
         kx = k*np.cos(theta)
         ky = k*np.sin(theta)
