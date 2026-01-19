@@ -270,11 +270,11 @@ class Wave_tracing():
 
         from scipy.optimize import fsolve
 
-        def k_imp(kk, d=d.values, g=g,T=T):
+        def k_imp(kk, d=d, g=g,T=T):
             return (np.sqrt((g*kk * np.tanh(kk*d)))) - (2*np.pi)/T
         
         
-        k = fsolve(k_imp,np.ones(d.values.shape)*k_approx)
+        k = fsolve(k_imp,k_approx)
 
         kx = k*np.cos(theta)
         ky = k*np.sin(theta)
@@ -377,7 +377,7 @@ class Wave_tracing():
         for i in range(nb_wave_rays):
             self.ray_k[i,0], self.ray_kx[i,0], self.ray_ky[i,0] = self.wave(T=wave_period,
                                                                 theta=theta0[i],
-                                                                d=self.d.sel(y=ys[i],x=xs[i],method='nearest'))
+                                                                d=self.d.sel(y=ys[i],x=xs[i],method='nearest').values)
             self.ray_cg[i,0] = self.c_intrinsic(k=self.ray_k[i,0],d=self.d.sel(y=ys[i],x=xs[i],method='nearest'),group_velocity=True)
 
         # set inital wave propagation direction
