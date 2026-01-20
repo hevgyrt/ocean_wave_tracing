@@ -244,7 +244,7 @@ class Wave_tracing():
         return nabla_c
 
 
-    def wave(self,T,theta,d):
+    def wave(self,T,theta,d,U=0,V=0):
         """ Method computing wave number from initial wave period.
         Solving implicitly for the wave number k, with initial guess from the approximate
         wave number according to Eckart (1952)
@@ -252,6 +252,10 @@ class Wave_tracing():
         Args:
             T (float): Wave period
             theta (float): radians. Wave direction
+            d (float): water depth [m]
+            U (float): ambient current in x-direction [m/s]
+            V (float): ambient current in y-direction [m/s]
+
 
         Returns:
             k0 (float): wave number
@@ -270,8 +274,10 @@ class Wave_tracing():
 
         from scipy.optimize import fsolve
 
-        def k_imp(kk, d=d, g=g,T=T):
-            return (np.sqrt((g*kk * np.tanh(kk*d)))) - (2*np.pi)/T
+        def k_imp(kk, d=d, g=g,T=T,U=U,V=V):
+            kx_ap = kk*np.cos(theta)
+            ky_ap = kk*np.sin(theta)
+            return (np.sqrt((g*kk * np.tanh(kk*d)))+ kx_ap*U + ky_ap*V ) - (2*np.pi)/T 
         
         
         k = fsolve(k_imp,k_approx)
@@ -378,7 +384,10 @@ class Wave_tracing():
         for i in range(nb_wave_rays):
             self.ray_k[i,0], self.ray_kx[i,0], self.ray_ky[i,0] = self.wave(T=wave_period,
                                                                 theta=theta0[i],
-                                                                d=self.d.sel(y=ys[i],x=xs[i],method='nearest').values)
+                                                                d=self.d.sel(y=ys[i],x=xs[i],method='nearest').values,
+                                                                U=self.U.isel(time=self.velocity_idt[i]).sel(y=ys[i],x=xs[i],method='nearest').values,
+                                                                V=self.V.isel(time=self.velocity_idt[i]).sel(y=ys[i],x=xs[i],method='nearest').values
+                                                                )
             self.ray_cg[i,0] = self.c_intrinsic(k=self.ray_k[i,0],d=self.d.sel(y=ys[i],x=xs[i],method='nearest'),group_velocity=True)
 
         # set inital wave propagation direction
